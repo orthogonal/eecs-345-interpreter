@@ -54,6 +54,29 @@
         )
 ))
 
+; Takes (return (+ 3 x)) and return 3+x, NOT a state!
+; Since this doesn't return a state, it's assuming that it is the last thing
+;    called and that at this point the user wants a value, not a state.
+(define Mstate_return
+    (lambda (expr s)
+        (Mvalue (cadr expr) s)
+))
+
+; Takes (if (cond) (then-expr) (else-expr))
+; First evaluates the boolean condition.  If it's true, return Mstate(then-expr)
+; If it's false, return just the state unchanged if no else statement, and
+;  Mstate(else-expr) if there is an else statement.
+(define Mstate_if
+    (lambda (expr s)
+        (if (Mboolean (cadr expr) s)
+            (Mstate (caddr expr s))
+            (if (null? (cdddr expr))
+                s
+                (Mstate (cadddr expr))
+            )
+        )
+))
+
 ; Can be a number, an atom, or a list
 ; If it's a number, just return the number.
 ; If it's an atom, return the value of that atom in the list, with error check. 
@@ -112,4 +135,5 @@
 ; Test code
 ;(Mstate '() new_state)
 ;(Mstate '( (var x) (var y 10) (var z (+ y y)) (var err (+ y x)) ) new_state)
-(Mstate '( (var x) (var y 10) (= x (+ y 10)) ) new_state)
+;(Mstate '( (var x) (var y 10) (= x (+ y 10)) ) new_state)
+(Mstate '( (var x 5) (var y) (= y (+ x 3)) (return y)) new_state)
