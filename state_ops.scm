@@ -66,13 +66,13 @@
 ; ========== STATE MANIPULATION ==========
 ; Changing particular things within a state
 
-(define add_binding
+(define set_binding
     (lambda (key value s)
         (update_bindings
             (add key value (delete key (bindings s))) s)
 ))
 
-(define add_init
+(define set_init
     (lambda (key value s)
         (update_inittable
             (add key value (delete key (inittable s))) s)
@@ -124,5 +124,5 @@
 ; ==== TEST CODE ====
 ;(delete 'a '((e 4) (b 5) (y 6) (a 7)))
 ;(union '((x 5) (y 6) (a 7)) '((e 4) (b 5) (y 6) (a 7)))
-;(add_init 'x 'true (add_binding 'y 2 (add_binding 'w 4 new_state)))
-;(get_binding 'x (add_binding 'x 5 (add_binding 'y 4 (add_binding 'x 2 new_state))))
+;(set_init 'x 'true (set_binding 'y 2 (set_binding 'w 4 new_state)))
+;(get_binding 'x (set_binding 'x 5 (set_binding 'y 4 (set_binding 'x 2 new_state))))

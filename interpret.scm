@@ -30,12 +30,27 @@
 ; (var x value) has length 3, so cddr will not be null.
 ; then you add x to inittable and add its calculated value as a binding.
 ; The calculated value is (Mvalue (caddr expr) s) or Mvalue(value)
+; Init is false if no value, true if there is a value.
 (define Mstate_var
     (lambda (expr s)
         (if (null? (cddr expr))
-            (add_init (cadr expr) 'false s)
-            (add_binding (cadr expr) (Mvalue (caddr expr) s)
-                (add_init (cadr expr) 'true s))
+            (set_init (cadr expr) 'false s)
+            (set_binding (cadr expr) (Mvalue (caddr expr) s)
+                (set_init (cadr expr) 'true s))
+        )
+))
+
+; Takes (= x 5) and
+;    if x hasn't been declared, it's not in the init table, so throw an error.
+;    set the binding of x to 5.
+; If it's an expression like (= x (+ 3 y)) set the binding to the
+;   Mvalue evaluation of the right operand expression.
+(define Mstate_eq
+    (lambda (expr s)
+        (if (eq? (get_init (cadr expr) s) 'error)
+            (error "Variable assignment before declaration")
+            (set_binding (cadr expr) (right_op expr s)
+                (set_init (cadr expr) 'true s))
         )
 ))
 
@@ -95,5 +110,6 @@
 
 
 ; Test code
-(Mstate '() new_state)
-(Mstate '( (var x) (var y 10) (var z (+ y y)) (var err (+ y x)) ) new_state)
+;(Mstate '() new_state)
+;(Mstate '( (var x) (var y 10) (var z (+ y y)) (var err (+ y x)) ) new_state)
+(Mstate '( (var x) (var y 10) (= x (+ y 10)) ) new_state)
