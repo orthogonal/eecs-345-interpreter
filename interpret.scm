@@ -36,7 +36,7 @@
         (if (null? (cddr expr))
             (set_init (cadr expr) 'false s)
             (set_binding (cadr expr) (Mvalue (caddr expr) s)
-                (set_init (cadr expr) 'true s))
+                (set_init (cadr expr) #t s))
         )
 ))
 
@@ -50,7 +50,7 @@
         (if (eq? (get_init (cadr expr) s) 'error)
             (error "Variable assignment before declaration")
             (set_binding (cadr expr) (right_op expr s)
-                (set_init (cadr expr) 'true s))
+                (set_init (cadr expr) #t s))
         )
 ))
 
@@ -92,20 +92,48 @@
         (cond
             ((number? expr) expr)
             ((not (list? expr)) (get_binding_safe expr s))
-            ((equal? (car expr) '+) (+ (left_op expr s) (right_op expr s)))
+            ((equal? (car expr) '+) (+ (left_op_val expr s) (right_op expr s)))
             ((equal? (car expr) '-)
                 (if (null? (caddr expr))
-                    (- 0 (left_op expr s))
-                    (- (left_op expr s) (right_op expr s))))
-            ((equal? (car expr) '*) (* (left_op expr s) (right_op expr s)))
-            ((equal? (car expr) '/) (/ (- (left_op expr s) (modulo (left_op expr s) (right_op expr s))) (right_op expr s))) ; Integer division:  (x - (x % y)) / y
-            ((equal? (car expr) '%) (modulo (left_op expr s) (right_op expr s)))
+                    (- 0 (left_op_val expr s))
+                    (- (left_op_val expr s) (right_op expr s))))
+            ((equal? (car expr) '*) (* (left_op_val expr s) (right_op expr s)))
+            ((equal? (car expr) '/) (/ (- (left_op_val expr s) (modulo (left_op_val expr s) (right_op expr s))) (right_op expr s))) ; Integer division:  (x - (x % y)) / y
+            ((equal? (car expr) '%) (modulo (left_op_val expr s) (right_op expr s)))
             ((logical_operator? (car expr)) (Mboolean expr s))
             (error "Invalid expression for Mvalue")
         )
 ))
 
-(define left_op
+; Returns the value of the boolean expression expr.
+; If expr is #t or #f, just return those.
+; If it's something else that's not a list, it must be a variable, so return the
+;    value of that variable (presumed to be correct type)
+; Otherwise, if it's a boolean expression do the corresponding scheme expression
+;    with the Mbooleans of the operands (or operand if it's not)
+; and if it's an arithmetic comparison, do the corresponding scheme expression
+;    with the Mvalues of the operands.
+; NOTE that this uses #t and #f, do we need to use true and false?
+(define Mboolean
+    (lambda (expr s)
+        (cond
+            ((boolean? expr) expr)
+            ((not (list? expr)) (get_binding_safe expr s))
+            ((equal? (car expr) '||) (or (Mboolean (cadr expr) s) (Mboolean (caddr expr) s)))
+            ((equal? (car expr) '&&) (and (Mboolean (cadr expr) s) (Mboolean (caddr expr) s)))
+            ((equal? (car expr) '!) (not (Mboolean (cadr expr) s)))
+            ((equal? (car expr) '>) (> (left_op_val expr s) (right_op_val expr s)))
+            ((equal? (car expr) '<) (< (left_op_val expr s) (right_op_val expr s)))
+            ((equal? (car expr) '>=) (>= (left_op_val expr s) (right_op_val expr s)))
+            ((equal? (car expr) '>=) (>= (left_op_val expr s) (right_op_val expr s)))
+            ((equal? (car expr) '==) (eq? (left_op_val expr s) (right_op_val expr s)))
+            ((equal? (car expr) '!=) (not (eq? (left_op_val expr s) (right_op_val expr s))))
+            (error "Invalid expression for Mboolean")
+        )
+))
+
+
+(define left_op_val
     (lambda (expr s)
         (Mvalue (cadr expr) s)
 ))
@@ -118,15 +146,15 @@
 (define logical_operator?
     (lambda (op)
         (cond
-            ((equal? op '||) 'true)
-            ((equal? op '&&) 'true)
-            ((equal? op '>) 'true)
-            ((equal? op '<) 'true)
-            ((equal? op '>=) 'true)
-            ((equal? op '<=) 'true)
-            ((equal? op '==) 'true)
-            ((equal? op '!=) 'true)
-            ((equal? op '!) 'true)
+            ((equal? op '||) #t)
+            ((equal? op '&&) #t)
+            ((equal? op '>) #t)
+            ((equal? op '<) #t)
+            ((equal? op '>=) #t)
+            ((equal? op '<=) #t)
+            ((equal? op '==) #t)
+            ((equal? op '!=) #t)
+            ((equal? op '!) #t)
             (else 'false)
         )
 ))
@@ -136,4 +164,5 @@
 ;(Mstate '() new_state)
 ;(Mstate '( (var x) (var y 10) (var z (+ y y)) (var err (+ y x)) ) new_state)
 ;(Mstate '( (var x) (var y 10) (= x (+ y 10)) ) new_state)
-(Mstate '( (var x 5) (var y) (= y (+ x 3)) (return y)) new_state)
+;(Mstate '( (var x 5) (var y) (= y (+ x 3)) (return y)) new_state)
+(Mstate '( (var y (&& #t #f)) (return y) ) new_state)

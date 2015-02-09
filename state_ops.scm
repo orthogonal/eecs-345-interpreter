@@ -124,5 +124,5 @@
 ; ==== TEST CODE ====
 ;(delete 'a '((e 4) (b 5) (y 6) (a 7)))
 ;(union '((x 5) (y 6) (a 7)) '((e 4) (b 5) (y 6) (a 7)))
-;(set_init 'x 'true (set_binding 'y 2 (set_binding 'w 4 new_state)))
+;(set_init 'x #t (set_binding 'y 2 (set_binding 'w 4 new_state)))
 ;(get_binding 'x (set_binding 'x 5 (set_binding 'y 4 (set_binding 'x 2 new_state))))
