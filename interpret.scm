@@ -49,7 +49,7 @@
     (lambda (expr s)
         (if (eq? (get_init (cadr expr) s) 'error)
             (error "Variable assignment before declaration")
-            (set_binding (cadr expr) (right_op expr s)
+            (set_binding (cadr expr) (right_op_val expr s)
                 (set_init (cadr expr) #t s))
         )
 ))
@@ -69,10 +69,10 @@
 (define Mstate_if
     (lambda (expr s)
         (if (Mboolean (cadr expr) s)
-            (Mstate (caddr expr s))
+            (Mstate (caddr expr) s)
             (if (null? (cdddr expr))
                 s
-                (Mstate (cadddr expr))
+                (Mstate (cadddr expr) s)
             )
         )
 ))
@@ -92,14 +92,14 @@
         (cond
             ((number? expr) expr)
             ((not (list? expr)) (get_binding_safe expr s))
-            ((equal? (car expr) '+) (+ (left_op_val expr s) (right_op expr s)))
+            ((equal? (car expr) '+) (+ (left_op_val expr s) (right_op_val expr s)))
             ((equal? (car expr) '-)
                 (if (null? (caddr expr))
                     (- 0 (left_op_val expr s))
-                    (- (left_op_val expr s) (right_op expr s))))
-            ((equal? (car expr) '*) (* (left_op_val expr s) (right_op expr s)))
-            ((equal? (car expr) '/) (/ (- (left_op_val expr s) (modulo (left_op_val expr s) (right_op expr s))) (right_op expr s))) ; Integer division:  (x - (x % y)) / y
-            ((equal? (car expr) '%) (modulo (left_op_val expr s) (right_op expr s)))
+                    (- (left_op_val expr s) (right_op_val expr s))))
+            ((equal? (car expr) '*) (* (left_op_val expr s) (right_op_val expr s)))
+            ((equal? (car expr) '/) (/ (- (left_op_val expr s) (modulo (left_op_val expr s) (right_op_val expr s))) (right_op_val expr s))) ; Integer division:  (x - (x % y)) / y
+            ((equal? (car expr) '%) (modulo (left_op_val expr s) (right_op_val expr s)))
             ((logical_operator? (car expr)) (Mboolean expr s))
             (error "Invalid expression for Mvalue")
         )
@@ -138,7 +138,7 @@
         (Mvalue (cadr expr) s)
 ))
 
-(define right_op
+(define right_op_val
     (lambda (expr s)
         (Mvalue (caddr expr) s)
 ))
@@ -165,4 +165,6 @@
 ;(Mstate '( (var x) (var y 10) (var z (+ y y)) (var err (+ y x)) ) new_state)
 ;(Mstate '( (var x) (var y 10) (= x (+ y 10)) ) new_state)
 ;(Mstate '( (var x 5) (var y) (= y (+ x 3)) (return y)) new_state)
-(Mstate '( (var y (&& #t #f)) (return y) ) new_state)
+;(Mstate '( (var y (&& #t #f)) (return y) ) new_state)
+
+(Mstate (parser "p1test1") new_state)
