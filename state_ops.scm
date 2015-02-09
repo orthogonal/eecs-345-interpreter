@@ -90,6 +90,14 @@
             key (inittable s))
 ))
 
+; Throw an error if the binding is not there.
+(define get_binding_safe
+    (lambda (key s)
+        (if (equal? (get_binding key s) 'error)
+            (error "Referencing variable before assignment")
+            (get_binding key s)
+)))
+
 
 ; ========== DEFINITIONS ==========
 ; Change these to restructure state
@@ -114,7 +122,7 @@
 
 
 ; ==== TEST CODE ====
-(delete 'a '((e 4) (b 5) (y 6) (a 7)))
-(union '((x 5) (y 6) (a 7)) '((e 4) (b 5) (y 6) (a 7)))
-(add_init 'x 'true (add_binding 'y 2 (add_binding 'w 4 new_state)))
-(get_binding 'x (add_binding 'x 5 (add_binding 'y 4 (add_binding 'x 2 new_state))))
+;(delete 'a '((e 4) (b 5) (y 6) (a 7)))
+;(union '((x 5) (y 6) (a 7)) '((e 4) (b 5) (y 6) (a 7)))
+;(add_init 'x 'true (add_binding 'y 2 (add_binding 'w 4 new_state)))
+;(get_binding 'x (add_binding 'x 5 (add_binding 'y 4 (add_binding 'x 2 new_state))))
