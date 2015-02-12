@@ -11,4 +11,5 @@
 (check-eq? (interpret "tests/7") 6)
 (check-eq? (interpret "tests/8") 10)
 (check-eq? (interpret "tests/9") 5)
-(check-eq? (interpret "tests/10") -39) 
+(check-eq? (interpret "tests/10") -39)
+ 

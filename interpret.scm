@@ -94,7 +94,7 @@
             ((not (list? expr)) (get_binding_safe expr s))
             ((equal? (car expr) '+) (+ (left_op_val expr s) (right_op_val expr s)))
             ((equal? (car expr) '-)
-                (if (null? (caddr expr))
+                (if (null? (cdr (cdr expr)))
                     (- 0 (left_op_val expr s))
                     (- (left_op_val expr s) (right_op_val expr s))))
             ((equal? (car expr) '*) (* (left_op_val expr s) (right_op_val expr s)))
