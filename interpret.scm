@@ -159,6 +159,12 @@
         )
 ))
 
+(define interpret
+    (lambda (filename)
+        (Mstate (parser filename) new_state)
+    )
+)
+
 
 ; Test code
 ;(Mstate '() new_state)
@@ -167,4 +173,4 @@
 ;(Mstate '( (var x 5) (var y) (= y (+ x 3)) (return y)) new_state)
 ;(Mstate '( (var y (&& #t #f)) (return y) ) new_state)
 
-(Mstate (parser "p1test1") new_state)
+;(Mstate (parser "p1test1") new_state)
