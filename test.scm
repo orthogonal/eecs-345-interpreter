@@ -20,3 +20,4 @@
 (check-eq? (interpret "tests/16") 100)
 (check-eq? (interpret "tests/17") 'false)
 (check-eq? (interpret "tests/18") 'true)
+(check-eq? (interpret "tests/p1test1") 200)
