@@ -33,12 +33,14 @@
 ; Init is false if no value, true if there is a value.
 (define Mstate_var
     (lambda (expr s)
-        (if (null? (cddr expr))
-            (set_init (cadr expr) 'false s)
-            (set_binding (cadr expr) (Mvalue (caddr expr) s)
-                (set_init (cadr expr) #t s))
+        (cond
+            ((eq? (get_init (cadr expr) s) #t) (error "Redefining variable"))
+            ((null? (cddr expr)) (set_init (cadr expr) 'false s))
+            (else (set_binding (cadr expr) (Mvalue (caddr expr) s)
+                (set_init (cadr expr) #t s)))
         )
-))
+    )
+)
 
 ; Takes (= x 5) and
 ;    if x hasn't been declared, it's not in the init table, so throw an error.
@@ -57,10 +59,16 @@
 ; Takes (return (+ 3 x)) and return 3+x, NOT a state!
 ; Since this doesn't return a state, it's assuming that it is the last thing
 ;    called and that at this point the user wants a value, not a state.
+; TODO: move the true/false conversion logic to new function
 (define Mstate_return
     (lambda (expr s)
-        (Mvalue (cadr expr) s)
-))
+        (cond
+            ((eq? (Mvalue (cadr expr) s) #t) 'true)
+            ((eq? (Mvalue (cadr expr) s) #f) 'false)
+            (else (Mvalue (cadr expr) s))
+        )
+    )
+)
 
 ; Takes (if (cond) (then-expr) (else-expr))
 ; First evaluates the boolean condition.  If it's true, return Mstate(then-expr)
@@ -94,7 +102,7 @@
             ((not (list? expr)) (get_binding_safe expr s))
             ((equal? (car expr) '+) (+ (left_op_val expr s) (right_op_val expr s)))
             ((equal? (car expr) '-)
-                (if (null? (caddr expr))
+                (if (null? (cddr expr)) 
                     (- 0 (left_op_val expr s))
                     (- (left_op_val expr s) (right_op_val expr s))))
             ((equal? (car expr) '*) (* (left_op_val expr s) (right_op_val expr s)))
@@ -118,6 +126,8 @@
     (lambda (expr s)
         (cond
             ((boolean? expr) expr)
+            ((equal? expr 'true) #t)
+            ((equal? expr 'false) #f)
             ((not (list? expr)) (get_binding_safe expr s))
             ((equal? (car expr) '||) (or (Mboolean (cadr expr) s) (Mboolean (caddr expr) s)))
             ((equal? (car expr) '&&) (and (Mboolean (cadr expr) s) (Mboolean (caddr expr) s)))
@@ -159,6 +169,12 @@
         )
 ))
 
+(define interpret
+    (lambda (filename)
+        (Mstate (parser filename) new_state)
+    )
+)
+
 
 ; Test code
 ;(Mstate '() new_state)
@@ -167,4 +183,4 @@
 ;(Mstate '( (var x 5) (var y) (= y (+ x 3)) (return y)) new_state)
 ;(Mstate '( (var y (&& #t #f)) (return y) ) new_state)
 
-(Mstate (parser "p1test1") new_state)
+;(Mstate (parser "p1test1") new_state)
