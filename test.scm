@@ -17,3 +17,6 @@
 (check-exn exn:fail? (lambda () (interpret "tests/13")))
 (check-exn exn:fail? (lambda () (interpret "tests/14")))
 (check-eq? (interpret "tests/15") 'true)
+(check-eq? (interpret "tests/16") 100)
+(check-eq? (interpret "tests/17") 'false)
+(check-eq? (interpret "tests/18") 'true)
