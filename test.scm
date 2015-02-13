@@ -12,4 +12,8 @@
 (check-eq? (interpret "tests/8") 10)
 (check-eq? (interpret "tests/9") 5)
 (check-eq? (interpret "tests/10") -39)
- 
+(check-exn exn:fail? (lambda () (interpret "tests/11")))
+(check-exn exn:fail? (lambda () (interpret "tests/12")))
+(check-exn exn:fail? (lambda () (interpret "tests/13")))
+(check-exn exn:fail? (lambda () (interpret "tests/14")))
+(check-eq? (interpret "tests/15") 'true)
