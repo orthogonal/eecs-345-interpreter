@@ -171,7 +171,8 @@
         (cond
           ((eq?  (table_search 'return (Mstate (parser filename) new_state)) #t) 'true)
           ((eq?  (table_search 'return (Mstate (parser filename) new_state)) #f) 'false)
-          (else (Mvalue (cadr expr) s)))
+          (else (table_search 'return (Mstate (parser filename) new_state)))
+          )
     )
 )
 
