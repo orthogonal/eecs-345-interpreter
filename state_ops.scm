@@ -117,7 +117,7 @@
     (lambda (new_inittable s)
         (update_second new_inittable s)))
 
-(define new_state '( () () )   )
+(define new_state '( () () ))
 
 
 

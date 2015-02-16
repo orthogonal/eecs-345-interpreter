@@ -1,6 +1,7 @@
 ;Logic necessary to run through test suite
-(require rackunit)
 (load "interpret.scm")
+(require rackunit)
+
 
 (check-eq? (interpret "tests/1") 150)
 (check-eq? (interpret "tests/2") -4)

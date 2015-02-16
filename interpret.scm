@@ -59,14 +59,10 @@
 ; Takes (return (+ 3 x)) and return 3+x, NOT a state!
 ; Since this doesn't return a state, it's assuming that it is the last thing
 ;    called and that at this point the user wants a value, not a state.
-; TODO: move the true/false conversion logic to new function
+; TODO: move the true/false conversion logic to new function, return a state not a value
 (define Mstate_return
     (lambda (expr s)
-        (cond
-            ((eq? (Mvalue (cadr expr) s) #t) 'true)
-            ((eq? (Mvalue (cadr expr) s) #f) 'false)
-            (else (Mvalue (cadr expr) s))
-        )
+      (add 'return (Mvalue (cadr expr) s) s)
     )
 )
 
@@ -169,9 +165,14 @@
         )
 ))
 
+;TODO get state and obtain value, 
 (define interpret
     (lambda (filename)
-        (Mstate (parser filename) new_state)
+        (cond
+          ((eq?  (table_search 'return (Mstate (parser filename) new_state)) #t) 'true)
+          ((eq?  (table_search 'return (Mstate (parser filename) new_state)) #f) 'false)
+          (else (table_search 'return (Mstate (parser filename) new_state)))
+          )
     )
 )
 
