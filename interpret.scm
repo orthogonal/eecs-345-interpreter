@@ -9,21 +9,20 @@
 ; ought to be a return function.
 ; If it gets an expression, i.e. (= x 5), rather than a list of expressions,
 ; it updates the state as appropriate rather than diving any deeper.
-(define Mstate
-    (lambda (expr s)
-        (if (null? expr)
-            s
-            (if (list? (car expr))
-                (Mstate (cdr expr) (Mstate (car expr) s))
-                (cond
-                    ((equal? (car expr) 'var)   (Mstate_var expr s))
-                    ((equal? (car expr) '=)     (Mstate_eq expr s))
-                    ((equal? (car expr) 'return) (Mstate_return expr s))
-                    ((equal? (car expr) 'if)    (Mstate_if expr s))
-                )
-            )
-        )
-))
+; If it sees a command it doesnt know how to handle it returns it
+(define Mstate-cps
+  (lambda (expr s return)
+    (cond
+      ((null? expr) s)
+      ((list? (car expr))(Mstate-cps (cdr expr) (Mstate-cps (car expr) s return) return))
+      ((equal? (car expr) 'var)                 (Mstate_var-cps expr s return))
+      ((equal? (car expr) '=)                   (Mstate_eq-cps expr s return))
+      ((equal? (car expr) 'return)              (Mstate_return-cps expr s return))
+      ((equal? (car expr) 'if)                  (Mstate_if-cps expr s return))
+      ((equal? (car expr) 'while)               (Mstate_while-cps expr s return))
+      ((equal? (car expr) 'begin)               (Mstate_begin expr s return))
+      (else (return (car expr)))
+      )))
 
 ; Two possibilities.
 ; (var x) has length 2, so cddr will be null and just add x to inittable.
@@ -31,10 +30,10 @@
 ; then you add x to inittable and add its calculated value as a binding.
 ; The calculated value is (Mvalue (caddr expr) s) or Mvalue(value)
 ; Init is false if no value, true if there is a value.
-(define Mstate_var
-    (lambda (expr s)
+(define Mstate_var-cps
+    (lambda (expr s return)
         (cond
-            ((eq? (get_init (cadr expr) s) #t) (error "Redefining variable"))
+            ((eq? (get_init (cadr expr) s) #t) error "Redefining variable")
             ((null? (cddr expr)) (set_init (cadr expr) 'false s))
             (else (set_binding (cadr expr) (Mvalue (caddr expr) s)
                 (set_init (cadr expr) #t s)))
@@ -47,8 +46,8 @@
 ;    set the binding of x to 5.
 ; If it's an expression like (= x (+ 3 y)) set the binding to the
 ;   Mvalue evaluation of the right operand expression.
-(define Mstate_eq
-    (lambda (expr s)
+(define Mstate_eq-cps
+    (lambda (expr s return)
         (if (eq? (get_init (cadr expr) s) 'error)
             (error "Variable assignment before declaration")
             (set_binding (cadr expr) (right_op_val expr s)
@@ -59,9 +58,8 @@
 ; Takes (return (+ 3 x)) and return 3+x, NOT a state!
 ; Since this doesn't return a state, it's assuming that it is the last thing
 ;    called and that at this point the user wants a value, not a state.
-; TODO: move the true/false conversion logic to new function, return a state not a value
-(define Mstate_return
-    (lambda (expr s)
+(define Mstate_return-cps
+    (lambda (expr s return)
       (add 'return (Mvalue (cadr expr) s) s)
     )
 )
@@ -70,16 +68,62 @@
 ; First evaluates the boolean condition.  If it's true, return Mstate(then-expr)
 ; If it's false, return just the state unchanged if no else statement, and
 ;  Mstate(else-expr) if there is an else statement.
-(define Mstate_if
-    (lambda (expr s)
-        (if (Mboolean (cadr expr) s)
-            (Mstate (caddr expr) s)
-            (if (null? (cdddr expr))
-                s
-                (Mstate (cadddr expr) s)
-            )
-        )
-))
+(define Mstate_if-cps
+  (lambda (expr s return)
+    (cond
+      ((Mboolean (cadr expr) s)(Mstate-cps (caddr expr) s return))
+      ((null? (cdddr expr)) s)
+      (else (Mstate-cps (cadddr expr) s return))
+      )
+    )
+  )
+
+;TODO:create Mstate_begin-cps in order to deal with (begin (= i (+ i 1)) (= y (+ y 1)) which is {i=i+1; y=y+1;}
+
+;Takes (while (< i j) (= i (+ i 1)))
+;First evelatuates boolean condition. If true, return Mstate with next continuation
+;Else state is unchanged from last received state
+;This is where layers of code are computed
+;TODO: integrate multiple layers
+
+(define Mstate_while-cps
+  (lambda (expr s return)
+    (cond
+      ((Mboolean (cadr expr) s)(intrp_while-cps (cadr expr) (caddr expr) s return))
+      (else s)
+      )
+    )
+  )
+
+;Evaluates a body based on a condtion that is true and watches for break
+;Takes (< i j) (= i (+ i 1)) s and return
+;This part takes care of break and continue statements
+;TODO: integrate continue statement
+
+(define intrp_while-cps
+  (lambda(condition body s return)
+    (call/cc (lambda (break)
+	     (letrec ((loop
+			(lambda (condition body s)
+			  (cond
+			    ((Mboolean condition s)(intrp_while-cps condition body (Mstate-cps body s
+							      (lambda(v)
+								(cond
+								  ((eq? v 'break)(break 0))
+								  ((eq? v 'continue)(error unimplemented))
+								  )
+								)
+							      )
+                                                                    return)
+			     )
+			     (else s)
+			     )
+			  )
+			))
+	       (loop condition body s)
+	       )))
+    )
+  )
 
 ; Can be a number, an atom, or a list
 ; If it's a number, just return the number.
@@ -138,7 +182,6 @@
         )
 ))
 
-
 (define left_op_val
     (lambda (expr s)
         (Mvalue (cadr expr) s)
@@ -165,13 +208,12 @@
         )
 ))
 
-;TODO get state and obtain value, 
 (define interpret
     (lambda (filename)
         (cond
-          ((eq?  (table_search 'return (Mstate (parser filename) new_state)) #t) 'true)
-          ((eq?  (table_search 'return (Mstate (parser filename) new_state)) #f) 'false)
-          (else (table_search 'return (Mstate (parser filename) new_state)))
+          ((eq?  (table_search 'return (Mstate-cps (parser filename) new_state (lambda(v)v))) #t) 'true)
+          ((eq?  (table_search 'return (Mstate-cps (parser filename) new_state (lambda(v)v))) #f) 'false)
+          (else (table_search 'return (Mstate-cps (parser filename) new_state (lambda(v)v))))
           )
     )
 )
