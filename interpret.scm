@@ -19,8 +19,8 @@
       ((equal? (car expr) '=)                   (Mstate_eq-cps expr s return))
       ((equal? (car expr) 'return)              (Mstate_return-cps expr s return))
       ((equal? (car expr) 'if)                  (Mstate_if-cps expr s return))
-      ((equal? (car expr) 'while)               (Mstate_while-cps expr s return))
-      ((equal? (car expr) 'begin)               (Mstate_begin expr s return))
+      ((equal? (car expr) 'while)               (Mstate_while-cps (cadr expr) (caddr expr) s return))
+      ((equal? (car expr) 'begin)               (Mstate_begin-cps (cdr expr) s return))
       (else (return (car expr)))
       )))
 
@@ -33,7 +33,7 @@
 (define Mstate_var-cps
     (lambda (expr s return)
         (cond
-            ((eq? (get_init (cadr expr) s) #t) error "Redefining variable")
+            ((eq? (get_init (cadr expr) s (getStateList s)) #t) error "Redefining variable")
             ((null? (cddr expr)) (set_init (cadr expr) 'false s))
             (else (set_binding (cadr expr) (Mvalue (caddr expr) s)
                 (set_init (cadr expr) #t s)))
@@ -48,7 +48,7 @@
 ;   Mvalue evaluation of the right operand expression.
 (define Mstate_eq-cps
     (lambda (expr s return)
-        (if (eq? (get_init (cadr expr) s) 'error)
+        (if (eq? (get_init (cadr expr) s (getStateList s)) 'error)
             (error "Variable assignment before declaration")
             (set_binding (cadr expr) (right_op_val expr s)
                 (set_init (cadr expr) #t s))
@@ -78,35 +78,27 @@
     )
   )
 
-;TODO:create Mstate_begin-cps in order to deal with (begin (= i (+ i 1)) (= y (+ y 1)) which is {i=i+1; y=y+1;}
-
-;Takes (while (< i j) (= i (+ i 1)))
-;First evelatuates boolean condition. If true, return Mstate with next continuation
-;Else state is unchanged from last received state
+;Takes a begin statement
 ;This is where layers of code are computed
-;TODO: integrate multiple layers
+;We just feed a new state in front of the other things to "store" them
 
-(define Mstate_while-cps
+(define Mstate_begin-cps
   (lambda (expr s return)
-    (cond
-      ((Mboolean (cadr expr) s)(intrp_while-cps (cadr expr) (caddr expr) s return))
-      (else s)
-      )
-    )
-  )
+    (Mstate-cps expr (append new_state s) return)
+  ))
 
 ;Evaluates a body based on a condtion that is true and watches for break
 ;Takes (< i j) (= i (+ i 1)) s and return
 ;This part takes care of break and continue statements
 ;TODO: integrate continue statement
 
-(define intrp_while-cps
+(define Mstate_while-cps
   (lambda(condition body s return)
     (call/cc (lambda (break)
 	     (letrec ((loop
 			(lambda (condition body s)
 			  (cond
-			    ((Mboolean condition s)(intrp_while-cps condition body (Mstate-cps body s
+			    ((Mboolean condition s)(Mstate_while-cps condition body (Mstate-cps body s
 							      (lambda(v)
 								(cond
 								  ((eq? v 'break)(break 0))
@@ -139,7 +131,7 @@
     (lambda (expr s)
         (cond
             ((number? expr) expr)
-            ((not (list? expr)) (get_binding_safe expr s))
+            ((not (list? expr)) (get_binding_safe expr s (getStateList s)))
             ((equal? (car expr) '+) (+ (left_op_val expr s) (right_op_val expr s)))
             ((equal? (car expr) '-)
                 (if (null? (cddr expr)) 
@@ -168,7 +160,7 @@
             ((boolean? expr) expr)
             ((equal? expr 'true) #t)
             ((equal? expr 'false) #f)
-            ((not (list? expr)) (get_binding_safe expr s))
+            ((not (list? expr)) (get_binding_safe expr s (getStateList s)))
             ((equal? (car expr) '||) (or (Mboolean (cadr expr) s) (Mboolean (caddr expr) s)))
             ((equal? (car expr) '&&) (and (Mboolean (cadr expr) s) (Mboolean (caddr expr) s)))
             ((equal? (car expr) '!) (not (Mboolean (cadr expr) s)))
