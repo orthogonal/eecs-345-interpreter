@@ -1,3 +1,4 @@
+
 ; ========== BASIC LIST OPERATIONS ==========
 ; Applicable for any key-value pair list.
 
@@ -85,17 +86,20 @@
 ))
 
 (define get_init
-    (lambda (key s)
-        (table_search
-            key (inittable s))
+    (lambda (key s stateList)
+      (cond
+        ((and (equal? (table_search key (inittable s)) 'error)(not(null? stateList))) (get_init key stateList (getStateList stateList)))
+        (else (table_search key (inittable s)))
+        )
 ))
 
 ; Throw an error if the binding is not there.
 (define get_binding_safe
-    (lambda (key s)
-        (if (equal? (get_binding key s) 'error)
-            (error "Referencing variable before assignment")
-            (get_binding key s)
+    (lambda (key s stateList)
+        (cond
+          ((and (equal? (get_binding key s) 'error)(not(null? stateList))) (get_binding_safe key stateList (getStateList stateList)))
+          ((equal? (get_binding key s) 'error) (error "Referencing variable before assignment"))
+          (else (get_binding key s))
 )))
 
 
@@ -104,6 +108,10 @@
 (define bindings
     (lambda (s)
         (car s)))
+
+(define getStateList
+    (lambda (s)
+        (cddr s)))
 
 (define update_bindings
     (lambda (new_bindings s)
