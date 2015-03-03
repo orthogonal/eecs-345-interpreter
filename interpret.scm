@@ -1,5 +1,5 @@
 (load "simpleParser.scm")
-(load "state_ops.scm")
+;(load "state_ops.scm")
 
 
 ; The basic outer Mstate.
@@ -21,7 +21,7 @@
       ((equal? (car expr) 'if)                  (Mstate_if-cps expr s return))
       ((equal? (car expr) 'while)               (Mstate_while-cps (cadr expr) (caddr expr) s return))
       ((equal? (car expr) 'begin)               (Mstate_begin-cps (cdr expr) s return))
-      (else (return (car expr)))
+      (else (return (car expr) s))
       )))
 
 ; Two possibilities.
@@ -33,7 +33,7 @@
 (define Mstate_var-cps
     (lambda (expr s return)
         (cond
-            ((eq? (get_init (cadr expr) s (getStateList s)) #t) error "Redefining variable")
+            ((eq? (get_init (cadr expr) s (getStateList s)) #t) (error "Redefining variable"))
             ((null? (cddr expr)) (set_init (cadr expr) 'false s))
             (else (set_binding (cadr expr) (Mvalue (caddr expr) s)
                 (set_init (cadr expr) #t s)))
@@ -81,10 +81,11 @@
 ;Takes a begin statement
 ;This is where layers of code are computed
 ;We just feed a new state in front of the other things to "store" them
+;Then we need to merge the tables back together
 
 (define Mstate_begin-cps
   (lambda (expr s return)
-    (Mstate-cps expr (append new_state s) return)
+    (unionStates (Mstate-cps expr (append new_state s) return) s)
   ))
 
 ;Evaluates a body based on a condtion that is true and watches for break
@@ -96,19 +97,19 @@
   (lambda(condition body s return)
     (call/cc (lambda (break)
 	     (letrec ((loop
-			(lambda (condition body s)
+			(lambda (condition body s1)
 			  (cond
-			    ((Mboolean condition s)(Mstate_while-cps condition body (Mstate-cps body s
-							      (lambda(v)
+			    ((Mboolean condition s1)(Mstate_while-cps condition body (Mstate-cps body s1
+							      (lambda(v s2)
 								(cond
-								  ((eq? v 'break)(break 0))
-								  ((eq? v 'continue)(error unimplemented))
+								  ((eq? v 'break)(break s2))
+								  ((eq? v 'continue)s2)
 								  )
 								)
 							      )
                                                                     return)
 			     )
-			     (else s)
+			     (else s1)
 			     )
 			  )
 			))
