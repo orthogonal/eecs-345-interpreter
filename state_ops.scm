@@ -70,7 +70,7 @@
 (define set_binding
     (lambda (key value s)
         (update_bindings
-            (add key value (delete key (bindings s))) s)
+            (add key (box value) (delete key (bindings s))) s)
 ))
 
 (define set_init
@@ -99,7 +99,7 @@
         (cond
           ((and (equal? (get_binding key s) 'error)(not(null? stateList))) (get_binding_safe key stateList (getStateList stateList)))
           ((equal? (get_binding key s) 'error) (error "Referencing variable before assignment"))
-          (else (get_binding key s))
+          (else (unbox(get_binding key s)))
 )))
 
 
