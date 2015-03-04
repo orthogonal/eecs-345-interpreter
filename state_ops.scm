@@ -67,11 +67,6 @@
 ; ========== STATE MANIPULATION ==========
 ; Changing particular things within a state
 
-(define unionStates
-    (lambda (newer_s old_s)
-        (append(cons(union (bindings newer_s)(bindings old_s))'()) (cons(union (inittable newer_s)(inittable old_s))'()))
-))
-
 (define set_binding
     (lambda (key value s)
         (update_bindings

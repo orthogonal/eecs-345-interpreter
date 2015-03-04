@@ -2,7 +2,6 @@
 (load "interpret.scm")
 (require rackunit)
 
-
 (check-eq? (interpret "tests/1") 150)
 (check-eq? (interpret "tests/2") -4)
 (check-eq? (interpret "tests/3") 10)
@@ -22,8 +21,15 @@
 (check-eq? (interpret "tests/17") 'false)
 (check-eq? (interpret "tests/18") 'true)
 (check-eq? (interpret "tests/p1test1") 200)
-(check-eq? (interpret "tests2/1") 0)
-(check-eq? (interpret "tests2/2") 3)
-(check-eq? (interpret "tests2/3") 5)
-(check-eq? (interpret "tests2/4") 18)
-(check-eq? (interpret "tests2/5") 3)
+
+(check-eq? (interpret "tests2/1") 100)
+(check-eq? (interpret "tests2/2") 20)
+(check-eq? (interpret "tests2/3") 6)
+(check-eq? (interpret "tests2/4") -1)
+(check-eq? (interpret "tests2/6") 2)
+(check-eq? (interpret "tests2/7") 164)
+(check-exn exn:fail? (lambda () (interpret "tests2/8")))
+(check-exn exn:fail? (lambda () (interpret "tests2/9")))
+(check-exn exn:fail? (lambda () (interpret "tests2/10")))
+(check-eq? (interpret "tests2/11") 12)
+(check-eq? (interpret "tests2/12") 32)

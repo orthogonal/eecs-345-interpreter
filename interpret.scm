@@ -1,5 +1,5 @@
 (load "simpleParser.scm")
-;(load "state_ops.scm")
+(load "state_ops.scm")
 
 
 ; The basic outer Mstate.
@@ -81,11 +81,10 @@
 ;Takes a begin statement
 ;This is where layers of code are computed
 ;We just feed a new state in front of the other things to "store" them
-;Then we need to merge the tables back together
 
 (define Mstate_begin-cps
   (lambda (expr s return)
-    (unionStates (Mstate-cps expr (append new_state s) return) s)
+    (Mstate-cps expr (append new_state s) return)
   ))
 
 ;Evaluates a body based on a condtion that is true and watches for break
@@ -103,7 +102,7 @@
 							      (lambda(v s2)
 								(cond
 								  ((eq? v 'break)(break s2))
-								  ((eq? v 'continue)s2)
+								  ((eq? v 'continue)(break (loop condition body s2)))
 								  )
 								)
 							      )
