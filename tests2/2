@@ -1,7 +1,7 @@
-var x = 3;
-var y = 0;
-while(x > 0){
-x = x - 1;
-y = y + 1;
+var x = 10;
+{
+  var y = 2;
+  var z = x * y;
+  x = z;
 }
-return y;
+return x;
