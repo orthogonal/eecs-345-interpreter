@@ -69,68 +69,117 @@
 
 (define set_binding
     (lambda (key value s)
-        (update_bindings
-            (add key (box value) (delete key (bindings s))) s)
+        ;(update_first (update_bindings
+        ;    (add key value (delete key (bindings (top_layer s)))) (top_layer s)) s)
+      (begin
+        (display key)
+        (display s)
+        (display (get_binding key s))
+        (display "\n")
+      (cond
+        ((eq? 'error (get_binding key s)) (update_first (update_bindings (add key value (delete key (bindings (car s)))) (car s)) s))
+        ((not (eq? 'error (get_binding_layer key (car s)))) (update_first (update_bindings (add key value (delete key (bindings (car s)))) (car s)) s))
+        (else (cons (car s) (set_binding key value (cdr s))))
+      ))
 ))
 
 (define set_init
     (lambda (key value s)
-        (update_inittable
-            (add key value (delete key (inittable s))) s)
+        (update_first (update_inittable
+            (add key value (delete key (inittable (top_layer s)))) (top_layer s)) s)
 ))
 
 (define get_binding
     (lambda (key s)
         (table_search
-            key (bindings s))
+            key (all_bindings s))
 ))
 
-(define get_init
-    (lambda (key s stateList)
-      (cond
-        ((and (equal? (table_search key (inittable s)) 'error)(not(null? stateList))) (get_init key stateList (getStateList stateList)))
-        (else (table_search key (inittable s)))
-        )
+(define get_binding_layer
+    (lambda (key layer)
+        (table_search
+            key (bindings layer))
 ))
+
+
+ (define get_init
+   (lambda (key s)
+     (table_search
+       key (all_inittable s))))
 
 ; Throw an error if the binding is not there.
 (define get_binding_safe
-    (lambda (key s stateList)
-        (cond
-          ((and (equal? (get_binding key s) 'error)(not(null? stateList))) (get_binding_safe key stateList (getStateList stateList)))
-          ((equal? (get_binding key s) 'error) (error "Referencing variable before assignment"))
-          (else (unbox(get_binding key s)))
+    (lambda (key s)
+        (if (equal? (get_binding key s) 'error)
+            (error "Referencing variable before assignment")
+            (get_binding key s)
 )))
 
 
 ; ========== DEFINITIONS ==========
 ; Change these to restructure state
-(define bindings
-    (lambda (s)
-        (car s)))
+(define bindings 
+  (lambda (layer)
+    (car layer)))
 
-(define getStateList
+(define all_bindings
     (lambda (s)
-        (cddr s)))
+      (cond
+        ((null? s) '())
+        (else (append (bindings (top_layer s)) (all_bindings (cdr s))))
+      )
+    )
+)
 
 (define update_bindings
-    (lambda (new_bindings s)
-        (update_first new_bindings s)))
+    (lambda (new_bindings layer)
+        (update_first new_bindings layer)))
 
 (define inittable
+  (lambda (layer)
+    (cadr layer)))
+
+(define all_inittable
     (lambda (s)
-        (cadr s)))
+      (cond
+        ((null? s) '())
+        (else (append (inittable (top_layer s)) (all_inittable (cdr s))))
+      )
+    )
+)
 
 (define update_inittable
-    (lambda (new_inittable s)
-        (update_second new_inittable s)))
+    (lambda (new_inittable layer)
+      (update_second new_inittable layer)))
+        
 
-(define new_state '( () () ))
+(define new_layer '( () () ))
 
+; State stored as a list of layers. Each layer contains two tables: bindings and inittable
+; Each table is stored as a list of pairs (var val)
+(define new_state (list new_layer))
+
+(define top_layer
+  (lambda (s)
+    (car s)
+  )
+)
+
+(define add_layer
+  (lambda (s)
+    (cons new_layer s)
+  )
+)
+
+(define remove_layer
+  (lambda (s) 
+    (cdr s)
+  )
+)
 
 
 ; ==== TEST CODE ====
 ;(delete 'a '((e 4) (b 5) (y 6) (a 7)))
 ;(union '((x 5) (y 6) (a 7)) '((e 4) (b 5) (y 6) (a 7)))
-;(set_init 'x #t (set_binding 'y 2 (set_binding 'w 4 new_state)))
 ;(get_binding 'x (set_binding 'x 5 (set_binding 'y 4 (set_binding 'x 2 new_state))))
+(set_binding 'y 3 (add_layer (set_init 'x #t (set_binding 'y 2 (set_binding 'w 4 new_state)))))
