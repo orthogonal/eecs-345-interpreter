@@ -21,7 +21,7 @@
 ))
 
 ; Take a table which is ((key1 value) (key2 value) ...)
-; and return ((key2 value) ...) if it was (delete key1 table)
+; and return ((key2 value) ...) if it was (delete-cps key1 table)
 (define delete
     (lambda (key table)
         (cond
@@ -35,15 +35,13 @@
 ; have key in it.  This version of table2 also has already recursively added
 ; the rest of the keys in table1 to itself.
 ; i.e. ((a 5) (b 3)) ((d 6) (a 3)) -> ((a 5) (b 3) (d 6))
-(define union
-    (lambda (table1 table2)
+(define union-cps
+    (lambda (table1 table2 return)
         (cond
-            ((null? table1) table2)
-            (else (cons
-                    (car table1)
-                    (delete (car (car table1)) (union (cdr table1) table2))
+            ((null? table1) (return table2))
+            (else (union-cps (cdr table1) table2 (lambda (t2) (cons (car table1)
+                (delete-cps (car (car table1)) t2 (lambda (v) (return v)))))))
         )))
-))
 
 ; Update the first item on a list
 (define update_first
@@ -78,8 +76,6 @@
 
 (define set_init
     (lambda (key value s)
-        ;(update_first (update_inittable
-        ;    (add key value (delete key (inittable (top_layer s)))) (top_layer s)) s)
         (cond
             ((eq? 'error (get_init key s)) (update_first (update_inittable (add key value (delete key (inittable (car s)))) (car s)) s))
             ((not (eq? 'error (get_init_layer key (car s)))) (update_first (update_inittable (add key value (delete key (inittable (car s)))) (car s)) s))
@@ -183,7 +179,7 @@
 
 
 ; ==== TEST CODE ====
-;(delete 'a '((e 4) (b 5) (y 6) (a 7)))
+;(delete-cps 'a '((e 4) (b 5) (y 6) (a 7)) (lambda (v) v))
 ;(union '((x 5) (y 6) (a 7)) '((e 4) (b 5) (y 6) (a 7)))
 ;(get_binding 'x (set_binding 'x 5 (set_binding 'y 4 (set_binding 'x 2 new_state))))
 ;(M_state '(= x z ) (remove_layer (set_binding 'z 2 (set_binding 'y 3 (add_layer (set_init 'x #t (set_binding 'y 2 (set_binding 'w 4 new_state))))))))
