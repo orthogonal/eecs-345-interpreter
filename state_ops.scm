@@ -5,12 +5,12 @@
 ; Step through a table represented as ((var val) (var val) (var val))
 ; If the name of the var matches the var argument, return val
 ; If it's not in the table return 'error
-(define table_search
-    (lambda (var table)
+(define table_search-cps
+    (lambda (var table return)
         (cond
-            ((null? table) 'error)
-            ((eq? var (car (car table))) (cadr (car table)))
-            (else (table_search var (cdr table)))
+            ((null? table) (return 'error))
+            ((eq? var (car (car table))) (return (cadr (car table))))
+            (else (table_search-cps var (cdr table) (lambda (v) (return v))))
 )))
 
 ; Add a (key value) to the table which is ((key value) (key value) ... )
@@ -21,13 +21,13 @@
 ))
 
 ; Take a table which is ((key1 value) (key2 value) ...)
-; and return ((key2 value) ...) if it was (delete key1 table)
-(define delete
-    (lambda (key table)
+; and return ((key2 value) ...) if it was (delete-cps key1 table)
+(define delete-cps
+    (lambda (key table return)
         (cond
-            ((null? table) '())
-            ((eq? key (car (car table))) (cdr table))
-            (else (cons (car table) (delete key (cdr table))))
+            ((null? table) (return '()))
+            ((eq? key (car (car table))) (return (cdr table)))
+            (else (delete-cps key (cdr table) (lambda (t) (return (cons (car table) t)))))
 )))
 
 ; Union of two tables
@@ -35,15 +35,13 @@
 ; have key in it.  This version of table2 also has already recursively added
 ; the rest of the keys in table1 to itself.
 ; i.e. ((a 5) (b 3)) ((d 6) (a 3)) -> ((a 5) (b 3) (d 6))
-(define union
-    (lambda (table1 table2)
+(define union-cps
+    (lambda (table1 table2 return)
         (cond
-            ((null? table1) table2)
-            (else (cons
-                    (car table1)
-                    (delete (car (car table1)) (union (cdr table1) table2))
+            ((null? table1) (return table2))
+            (else (union-cps (cdr table1) table2 (lambda (t2) (cons (car table1)
+                (delete-cps (car (car table1)) t2 (lambda (v) (return v)))))))
         )))
-))
 
 ; Update the first item on a list
 (define update_first
@@ -70,37 +68,40 @@
 (define set_binding
     (lambda (key value s)
         (update_bindings
-            (add key (box value) (delete key (bindings s))) s)
+            (add key (box value) (delete-cps key (bindings s))) s (lambda (v) v))
 ))
 
 (define set_init
     (lambda (key value s)
         (update_inittable
-            (add key value (delete key (inittable s))) s)
+            (add key value (delete-cps key (inittable s))) s (lambda (v) v))
 ))
 
 (define get_binding
     (lambda (key s)
-        (table_search
-            key (bindings s))
+        (table_search-cps
+            key (bindings s) (lambda (v) v))
 ))
 
-(define get_init
-    (lambda (key s stateList)
-      (cond
-        ((and (equal? (table_search key (inittable s)) 'error)(not(null? stateList))) (get_init key stateList (getStateList stateList)))
-        (else (table_search key (inittable s)))
-        )
-))
+(define get_init-cps
+    (lambda (key s stateList return)
+        (letrec ((val (table_search-cps key (inittable s) (lambda (v) v))))
+            (cond
+                ((and (equal? val 'error) (not (null? stateList)))
+                    (get_init-cps key stateList (getStateList stateList) (lambda (v) (return v))))
+                (else (table_search-cps key (inittable s) (lambda (v) (return v))))
+))))
 
 ; Throw an error if the binding is not there.
-(define get_binding_safe
-    (lambda (key s stateList)
-        (cond
-          ((and (equal? (get_binding key s) 'error)(not(null? stateList))) (get_binding_safe key stateList (getStateList stateList)))
-          ((equal? (get_binding key s) 'error) (error "Referencing variable before assignment"))
-          (else (unbox(get_binding key s)))
-)))
+(define get_binding_safe-cps
+    (lambda (key s stateList return)
+        (letrec ((val (get_binding key s)))
+            (cond
+                ((and (equal? val 'error) (not (null? stateList)))
+                    ((get_binding_safe-cps key stateList (getStateList stateList) (lambda (v) (return v))))
+                ((equal? val 'error) (error "Referencing variable before assignment"))
+                (else (return (unbox val)))
+)))))
 
 
 ; ========== DEFINITIONS ==========
@@ -130,7 +131,7 @@
 
 
 ; ==== TEST CODE ====
-;(delete 'a '((e 4) (b 5) (y 6) (a 7)))
+;(delete-cps 'a '((e 4) (b 5) (y 6) (a 7)) (lambda (v) v))
 ;(union '((x 5) (y 6) (a 7)) '((e 4) (b 5) (y 6) (a 7)))
 ;(set_init 'x #t (set_binding 'y 2 (set_binding 'w 4 new_state)))
 ;(get_binding 'x (set_binding 'x 5 (set_binding 'y 4 (set_binding 'x 2 new_state))))

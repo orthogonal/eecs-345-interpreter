@@ -35,7 +35,7 @@
 (define Mstate_var-cps
     (lambda (expr s return)
         (cond
-            ((eq? (get_init (cadr expr) s (getStateList s)) #t) (error "Redefining variable"))
+            ((eq? (get_init-cps (cadr expr) s (getStateList s) (lambda (v) v)) #t) (error "Redefining variable"))
             ((null? (cddr expr)) (set_init (cadr expr) 'false s))
             (else (set_binding (cadr expr) (Mvalue (caddr expr) s)
                 (set_init (cadr expr) #t s)))
@@ -50,7 +50,7 @@
 ;   Mvalue evaluation of the right operand expression.
 (define Mstate_eq-cps
     (lambda (expr s return)
-        (if (eq? (get_init (cadr expr) s (getStateList s)) 'error)
+        (if (eq? (get_init-cps (cadr expr) s (getStateList s) (lambda (v) v)) 'error)
             (error "Variable assignment before declaration")
             (set_binding (cadr expr) (right_op_val expr s)
                 (set_init (cadr expr) #t s))
@@ -133,7 +133,7 @@
     (lambda (expr s)
         (cond
             ((number? expr) expr)
-            ((not (list? expr)) (get_binding_safe expr s (getStateList s)))
+            ((not (list? expr)) (get_binding_safe-cps expr s (getStateList s) (lambda (v) v)))
             ((equal? (car expr) '+) (+ (left_op_val expr s) (right_op_val expr s)))
             ((equal? (car expr) '-)
                 (if (null? (cddr expr)) 
@@ -162,7 +162,7 @@
             ((boolean? expr) expr)
             ((equal? expr 'true) #t)
             ((equal? expr 'false) #f)
-            ((not (list? expr)) (get_binding_safe expr s (getStateList s)))
+            ((not (list? expr)) (get_binding_safe-cps expr s (getStateList s) (lambda (v) v)))
             ((equal? (car expr) '||) (or (Mboolean (cadr expr) s) (Mboolean (caddr expr) s)))
             ((equal? (car expr) '&&) (and (Mboolean (cadr expr) s) (Mboolean (caddr expr) s)))
             ((equal? (car expr) '!) (not (Mboolean (cadr expr) s)))
@@ -206,9 +206,9 @@
     (lambda (filename)
         (letrec ((s (Mstate-cps (parser filename) new_state (lambda (v) v))))
             (cond
-                ((eq? (table_search 'return s) #t) 'true)
-                ((eq? (table_search 'return s) #f) 'false)
-                (else (table_search 'return s))
+                ((eq? (table_search-cps 'return s (lambda (v) v)) #t) 'true)
+                ((eq? (table_search-cps 'return s (lambda (v) v)) #f) 'false)
+                (else (table_search-cps 'return s (lambda (v) v)))
             )
 )))
 
