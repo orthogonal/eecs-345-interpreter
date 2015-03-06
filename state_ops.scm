@@ -69,24 +69,22 @@
 
 (define set_binding
     (lambda (key value s)
-        ;(update_first (update_bindings
-        ;    (add key value (delete key (bindings (top_layer s)))) (top_layer s)) s)
-      (begin
-        (display key)
-        (display s)
-        (display (get_binding key s))
-        (display "\n")
       (cond
         ((eq? 'error (get_binding key s)) (update_first (update_bindings (add key value (delete key (bindings (car s)))) (car s)) s))
         ((not (eq? 'error (get_binding_layer key (car s)))) (update_first (update_bindings (add key value (delete key (bindings (car s)))) (car s)) s))
         (else (cons (car s) (set_binding key value (cdr s))))
-      ))
+      )
 ))
 
 (define set_init
     (lambda (key value s)
-        (update_first (update_inittable
-            (add key value (delete key (inittable (top_layer s)))) (top_layer s)) s)
+        ;(update_first (update_inittable
+        ;    (add key value (delete key (inittable (top_layer s)))) (top_layer s)) s)
+        (cond
+            ((eq? 'error (get_init key s)) (update_first (update_inittable (add key value (delete key (inittable (car s)))) (car s)) s))
+            ((not (eq? 'error (get_init_layer key (car s)))) (update_first (update_inittable (add key value (delete key (inittable (car s)))) (car s)) s))
+            (else (cons (car s) (set_init key value (cdr s))))
+        )
 ))
 
 (define get_binding
@@ -106,6 +104,12 @@
    (lambda (key s)
      (table_search
        key (all_inittable s))))
+
+(define get_init_layer
+    (lambda (key layer)
+        (table_search
+            key (inittable layer))
+))
 
 ; Throw an error if the binding is not there.
 (define get_binding_safe
@@ -182,4 +186,4 @@
 ;(delete 'a '((e 4) (b 5) (y 6) (a 7)))
 ;(union '((x 5) (y 6) (a 7)) '((e 4) (b 5) (y 6) (a 7)))
 ;(get_binding 'x (set_binding 'x 5 (set_binding 'y 4 (set_binding 'x 2 new_state))))
-(set_binding 'y 3 (add_layer (set_init 'x #t (set_binding 'y 2 (set_binding 'w 4 new_state)))))
+;(M_state '(= x z ) (remove_layer (set_binding 'z 2 (set_binding 'y 3 (add_layer (set_init 'x #t (set_binding 'y 2 (set_binding 'w 4 new_state))))))))

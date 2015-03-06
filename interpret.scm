@@ -33,7 +33,7 @@
 (define Mstate_var-cps
     (lambda (expr s return)
         (cond
-            ((eq? (get_init (cadr expr) s (getStateList s)) #t) (error "Redefining variable"))
+            ((eq? (get_init (cadr expr) s) #t) (error "Redefining variable"))
             ((null? (cddr expr)) (set_init (cadr expr) 'false s))
             (else (set_binding (cadr expr) (Mvalue (caddr expr) s)
                 (set_init (cadr expr) #t s)))
@@ -48,7 +48,7 @@
 ;   Mvalue evaluation of the right operand expression.
 (define Mstate_eq-cps
     (lambda (expr s return)
-        (if (eq? (get_init (cadr expr) s (getStateList s)) 'error)
+        (if (eq? (get_init (cadr expr) s) 'error)
             (error "Variable assignment before declaration")
             (set_binding (cadr expr) (right_op_val expr s)
                 (set_init (cadr expr) #t s))
@@ -70,11 +70,14 @@
 ;  Mstate(else-expr) if there is an else statement.
 (define Mstate_if-cps
   (lambda (expr s return)
+    (begin
+      (display s)
+      (display "\n")
     (cond
       ((Mboolean (cadr expr) s)(Mstate-cps (caddr expr) s return))
       ((null? (cdddr expr)) s)
       (else (Mstate-cps (cadddr expr) s return))
-      )
+      ))
     )
   )
 
@@ -84,7 +87,7 @@
 
 (define Mstate_begin-cps
   (lambda (expr s return)
-    (Mstate-cps expr (append new_state s) return)
+    (remove_layer (Mstate-cps expr (add_layer s) return))
   ))
 
 ;Evaluates a body based on a condtion that is true and watches for break
@@ -131,7 +134,7 @@
     (lambda (expr s)
         (cond
             ((number? expr) expr)
-            ((not (list? expr)) (get_binding_safe expr s (getStateList s)))
+            ((not (list? expr)) (get_binding_safe expr s))
             ((equal? (car expr) '+) (+ (left_op_val expr s) (right_op_val expr s)))
             ((equal? (car expr) '-)
                 (if (null? (cddr expr)) 
@@ -160,7 +163,7 @@
             ((boolean? expr) expr)
             ((equal? expr 'true) #t)
             ((equal? expr 'false) #f)
-            ((not (list? expr)) (get_binding_safe expr s (getStateList s)))
+            ((not (list? expr)) (get_binding_safe expr s))
             ((equal? (car expr) '||) (or (Mboolean (cadr expr) s) (Mboolean (caddr expr) s)))
             ((equal? (car expr) '&&) (and (Mboolean (cadr expr) s) (Mboolean (caddr expr) s)))
             ((equal? (car expr) '!) (not (Mboolean (cadr expr) s)))

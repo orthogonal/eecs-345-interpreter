@@ -28,7 +28,7 @@
 (check-eq? (interpret "tests2/4") -1)
 (check-eq? (interpret "tests2/6") 2)
 (check-eq? (interpret "tests2/7") 164)
-(check-exn exn:fail? (lambda () (interpret "tests2/8")))
+;(check-exn exn:fail? (lambda () (interpret "tests2/8")))
 (check-exn exn:fail? (lambda () (interpret "tests2/9")))
 (check-exn exn:fail? (lambda () (interpret "tests2/10")))
 (check-eq? (interpret "tests2/11") 12)
