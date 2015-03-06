@@ -37,8 +37,7 @@
         (cond
             ((eq? (get_init-cps (cadr expr) s (getStateList s) (lambda (v) v)) #t) (error "Redefining variable"))
             ((null? (cddr expr)) (return (set_init (cadr expr) 'false s)))
-            (else (return (set_binding (cadr expr) (Mvalue (caddr expr) s)
-                (set_init (cadr expr) #t s))))
+            (else (Mvalue-cps (caddr expr) s (lambda (v) (return set_binding (cadr expr) v (set_init (cadr expr) #t s)))))
         )
     )
 )
@@ -62,7 +61,7 @@
 ;    called and that at this point the user wants a value, not a state.
 (define Mstate_return-cps
     (lambda (expr s return)
-      (return (add 'return (Mvalue (cadr expr) s) s))
+      (Mvalue-cps (cadr expr) s (lambda (v) (return (add 'return v s))))
     )
 )
 
@@ -73,7 +72,7 @@
 (define Mstate_if-cps
   (lambda (expr s return)
     (cond
-      ((Mboolean (cadr expr) s) (Mstate-cps (caddr expr) s (lambda (s1) (return s1))))
+      ((Mboolean-cps (cadr expr) s (lambda (v) v)) (Mstate-cps (caddr expr) s (lambda (s1) (return s1))))
       ((null? (cdddr expr)) (return s))
       (else (Mstate-cps (cadddr expr) s (lambda (s1) (return s1))))
       )
@@ -100,7 +99,7 @@
 	     (letrec ((loop
 			(lambda (condition body s1)
 			  (cond
-			    ((Mboolean condition s1)(Mstate_while-cps condition body (Mstate-cps body s1
+			    ((Mboolean-cps condition s1 (lambda (v) v)) (Mstate_while-cps condition body (Mstate-cps body s1
 							      (lambda(v s2)
 								(cond
 								  ((eq? v 'break)(break s2))
@@ -129,20 +128,20 @@
 ; If it's none of those, check if it's a boolean operator, and if so return the
 ;  boolean evaluation of the expression.
 ; If none of the above, throw an error, expression is invalid.
-(define Mvalue
-    (lambda (expr s)
+(define Mvalue-cps
+    (lambda (expr s return)
         (cond
-            ((number? expr) expr)
-            ((not (list? expr)) (get_binding_safe-cps expr s (getStateList s) (lambda (v) v)))
-            ((equal? (car expr) '+) (+ (left_op_val expr s) (right_op_val expr s)))
+            ((number? expr) (return expr))
+            ((not (list? expr)) (get_binding_safe-cps expr s (getStateList s) (lambda (v) (return v))))
+            ((equal? (car expr) '+) (return (+ (left_op_val expr s) (right_op_val expr s))))
             ((equal? (car expr) '-)
                 (if (null? (cddr expr)) 
-                    (- 0 (left_op_val expr s))
-                    (- (left_op_val expr s) (right_op_val expr s))))
-            ((equal? (car expr) '*) (* (left_op_val expr s) (right_op_val expr s)))
-            ((equal? (car expr) '/) (/ (- (left_op_val expr s) (modulo (left_op_val expr s) (right_op_val expr s))) (right_op_val expr s))) ; Integer division:  (x - (x % y)) / y
-            ((equal? (car expr) '%) (modulo (left_op_val expr s) (right_op_val expr s)))
-            ((logical_operator? (car expr)) (Mboolean expr s))
+                    (return (- 0 (left_op_val expr s)))
+                    (return (- (left_op_val expr s) (right_op_val expr s)))))
+            ((equal? (car expr) '*) (return (* (left_op_val expr s) (right_op_val expr s))))
+            ((equal? (car expr) '/) (return (/ (- (left_op_val expr s) (modulo (left_op_val expr s) (right_op_val expr s))) (right_op_val expr s)))) ; Integer division:  (x - (x % y)) / y
+            ((equal? (car expr) '%) (return (modulo (left_op_val expr s) (right_op_val expr s))))
+            ((logical_operator? (car expr)) (Mboolean-cps expr s (lambda (v) (return v))))
             (error "Invalid expression for Mvalue")
         )
 ))
@@ -156,34 +155,34 @@
 ; and if it's an arithmetic comparison, do the corresponding scheme expression
 ;    with the Mvalues of the operands.
 ; NOTE that this uses #t and #f, do we need to use true and false?
-(define Mboolean
-    (lambda (expr s)
+(define Mboolean-cps
+    (lambda (expr s return)
         (cond
-            ((boolean? expr) expr)
-            ((equal? expr 'true) #t)
-            ((equal? expr 'false) #f)
-            ((not (list? expr)) (get_binding_safe-cps expr s (getStateList s) (lambda (v) v)))
-            ((equal? (car expr) '||) (or (Mboolean (cadr expr) s) (Mboolean (caddr expr) s)))
-            ((equal? (car expr) '&&) (and (Mboolean (cadr expr) s) (Mboolean (caddr expr) s)))
-            ((equal? (car expr) '!) (not (Mboolean (cadr expr) s)))
-            ((equal? (car expr) '>) (> (left_op_val expr s) (right_op_val expr s)))
-            ((equal? (car expr) '<) (< (left_op_val expr s) (right_op_val expr s)))
-            ((equal? (car expr) '>=) (>= (left_op_val expr s) (right_op_val expr s)))
-            ((equal? (car expr) '>=) (>= (left_op_val expr s) (right_op_val expr s)))
-            ((equal? (car expr) '==) (eq? (left_op_val expr s) (right_op_val expr s)))
-            ((equal? (car expr) '!=) (not (eq? (left_op_val expr s) (right_op_val expr s))))
+            ((boolean? expr) (return expr))
+            ((equal? expr 'true) (return #t))
+            ((equal? expr 'false) (return #f))
+            ((not (list? expr)) (get_binding_safe-cps expr s (getStateList s) (lambda (v) (return v))))
+            ((equal? (car expr) '||) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (or v1 v2)))))))
+            ((equal? (car expr) '&&) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (and v1 v2)))))))
+            ((equal? (car expr) '!) (Mboolean-cps (cadr expr) s (lambda (v) (not v))))
+            ((equal? (car expr) '>) (return (> (left_op_val expr s) (right_op_val expr s))))
+            ((equal? (car expr) '<) (return (< (left_op_val expr s) (right_op_val expr s))))
+            ((equal? (car expr) '>=) (return (>= (left_op_val expr s) (right_op_val expr s))))
+            ((equal? (car expr) '>=) (return (>= (left_op_val expr s) (right_op_val expr s))))
+            ((equal? (car expr) '==) (return (eq? (left_op_val expr s) (right_op_val expr s))))
+            ((equal? (car expr) '!=) (return (not (eq? (left_op_val expr s) (right_op_val expr s)))))
             (error "Invalid expression for Mboolean")
         )
 ))
 
 (define left_op_val
     (lambda (expr s)
-        (Mvalue (cadr expr) s)
+        (Mvalue-cps (cadr expr) s (lambda (v) v))
 ))
 
 (define right_op_val
     (lambda (expr s)
-        (Mvalue (caddr expr) s)
+        (Mvalue-cps (caddr expr) s (lambda (v) v))
 ))
 
 (define logical_operator?
