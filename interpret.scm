@@ -13,15 +13,17 @@
 (define Mstate-cps
   (lambda (expr s return)
     (cond
-      ((null? expr) s)
-      ((list? (car expr))(Mstate-cps (cdr expr) (Mstate-cps (car expr) s return) return))
-      ((equal? (car expr) 'var)                 (Mstate_var-cps expr s return))
-      ((equal? (car expr) '=)                   (Mstate_eq-cps expr s return))
-      ((equal? (car expr) 'return)              (Mstate_return-cps expr s return))
-      ((equal? (car expr) 'if)                  (Mstate_if-cps expr s return))
-      ((equal? (car expr) 'while)               (Mstate_while-cps (cadr expr) (caddr expr) s return))
-      ((equal? (car expr) 'begin)               (Mstate_begin-cps (cdr expr) s return))
-      (else (return (car expr) s))
+      ((null? expr) (return s))
+      ((list? (car expr))                       (Mstate-cps (car expr) s 
+                                                    (lambda (s1) (Mstate-cps (cdr expr) s1
+                                                    (lambda (s2) (return s2))))))
+      ((equal? (car expr) 'var)                 (Mstate_var-cps expr s (lambda (s1) (return s1))))
+      ((equal? (car expr) '=)                   (Mstate_eq-cps expr s (lambda (s1) (return s1))))
+      ((equal? (car expr) 'return)              (Mstate_return-cps expr s (lambda (s1) (return s1))))
+      ((equal? (car expr) 'if)                  (Mstate_if-cps expr s (lambda (s1) (return s1))))
+      ((equal? (car expr) 'while)               (Mstate_while-cps (cadr expr) (caddr expr) s (lambda (s1) (return s1))))
+      ((equal? (car expr) 'begin)               (Mstate_begin-cps (cdr expr) s (lambda (s1) (return s1))))
+      (else (return s))
       )))
 
 ; Two possibilities.
@@ -202,20 +204,12 @@
 
 (define interpret
     (lambda (filename)
-        (cond
-          ((eq?  (table_search 'return (Mstate-cps (parser filename) new_state (lambda(v)v))) #t) 'true)
-          ((eq?  (table_search 'return (Mstate-cps (parser filename) new_state (lambda(v)v))) #f) 'false)
-          (else (table_search 'return (Mstate-cps (parser filename) new_state (lambda(v)v))))
-          )
-    )
-)
+        (letrec ((s (Mstate-cps (parser filename) new_state (lambda (v) v))))
+            (cond
+                ((eq? (table_search 'return s) #t) 'true)
+                ((eq? (table_search 'return s) #f) 'false)
+                (else (table_search 'return s))
+            )
+)))
 
 
-; Test code
-;(Mstate '() new_state)
-;(Mstate '( (var x) (var y 10) (var z (+ y y)) (var err (+ y x)) ) new_state)
-;(Mstate '( (var x) (var y 10) (= x (+ y 10)) ) new_state)
-;(Mstate '( (var x 5) (var y) (= y (+ x 3)) (return y)) new_state)
-;(Mstate '( (var y (&& #t #f)) (return y) ) new_state)
-
-;(Mstate (parser "p1test1") new_state)
