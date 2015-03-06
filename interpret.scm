@@ -36,9 +36,9 @@
     (lambda (expr s return)
         (cond
             ((eq? (get_init-cps (cadr expr) s (getStateList s) (lambda (v) v)) #t) (error "Redefining variable"))
-            ((null? (cddr expr)) (set_init (cadr expr) 'false s))
-            (else (set_binding (cadr expr) (Mvalue (caddr expr) s)
-                (set_init (cadr expr) #t s)))
+            ((null? (cddr expr)) (return (set_init (cadr expr) 'false s)))
+            (else (return (set_binding (cadr expr) (Mvalue (caddr expr) s)
+                (set_init (cadr expr) #t s))))
         )
     )
 )
@@ -52,8 +52,8 @@
     (lambda (expr s return)
         (if (eq? (get_init-cps (cadr expr) s (getStateList s) (lambda (v) v)) 'error)
             (error "Variable assignment before declaration")
-            (set_binding (cadr expr) (right_op_val expr s)
-                (set_init (cadr expr) #t s))
+            (return (set_binding (cadr expr) (right_op_val expr s)
+                (set_init (cadr expr) #t s)))
         )
 ))
 
@@ -62,7 +62,7 @@
 ;    called and that at this point the user wants a value, not a state.
 (define Mstate_return-cps
     (lambda (expr s return)
-      (add 'return (Mvalue (cadr expr) s) s)
+      (return (add 'return (Mvalue (cadr expr) s) s))
     )
 )
 
@@ -73,9 +73,9 @@
 (define Mstate_if-cps
   (lambda (expr s return)
     (cond
-      ((Mboolean (cadr expr) s)(Mstate-cps (caddr expr) s return))
-      ((null? (cdddr expr)) s)
-      (else (Mstate-cps (cadddr expr) s return))
+      ((Mboolean (cadr expr) s) (Mstate-cps (caddr expr) s (lambda (s1) (return s1))))
+      ((null? (cdddr expr)) (return s))
+      (else (Mstate-cps (cadddr expr) s (lambda (s1) (return s1))))
       )
     )
   )
@@ -86,7 +86,7 @@
 
 (define Mstate_begin-cps
   (lambda (expr s return)
-    (Mstate-cps expr (append new_state s) return)
+    (Mstate-cps expr (append new_state s) (lambda (s1) (return s1)))
   ))
 
 ;Evaluates a body based on a condtion that is true and watches for break
