@@ -11,19 +11,22 @@
 ; it updates the state as appropriate rather than diving any deeper.
 ; If it sees a command it doesnt know how to handle it returns it
 (define Mstate-cps
-  (lambda (expr s return)
+  (lambda (expr s return break)
     (cond
       ((null? expr) (return s))
       ((list? (car expr))                       (Mstate-cps (car expr) s 
                                                     (lambda (s1) (Mstate-cps (cdr expr) s1
-                                                    (lambda (s2) (return s2))))))
-      ((equal? (car expr) 'var)                 (Mstate_var-cps expr s (lambda (s1) (return s1))))
-      ((equal? (car expr) '=)                   (Mstate_eq-cps expr s (lambda (s1) (return s1))))
-      ((equal? (car expr) 'return)              (Mstate_return-cps expr s (lambda (s1) (return s1))))
-      ((equal? (car expr) 'if)                  (Mstate_if-cps expr s (lambda (s1) (return s1))))
-      ((equal? (car expr) 'while)               (Mstate_while-cps (cadr expr) (caddr expr) s (lambda (s1) (return s1))))
-      ((equal? (car expr) 'begin)               (Mstate_begin-cps (cdr expr) s (lambda (s1) (return s1))))
-      (else (return s))
+                                                    (lambda (s2) (return s2)) (lambda (s2) (break s2)))) break))
+      ((equal? (car expr) 'var)                 (Mstate_var-cps expr s return break))
+      ((equal? (car expr) '=)                   (Mstate_eq-cps expr s return break))
+      ((equal? (car expr) 'return)              (Mstate_return-cps expr s return break))
+      ((equal? (car expr) 'if)                  (Mstate_if-cps expr s return break))
+      ((equal? (car expr) 'while)               (Mstate_while-cps (cadr expr) (caddr expr) s return))
+      ((equal? (car expr) 'begin)               (Mstate_begin-cps (cdr expr) s return break))
+      ((equal? (car expr) 'break)               (break (remove_layer s)))
+      ((equal? (car expr) 'continue)            s)
+
+      
       )))
 
 ; Two possibilities.
@@ -33,7 +36,7 @@
 ; The calculated value is (Mvalue (caddr expr) s) or Mvalue(value)
 ; Init is false if no value, true if there is a value.
 (define Mstate_var-cps
-    (lambda (expr s return)
+    (lambda (expr s return break)
         (cond
             ((eq? (get_init (cadr expr) s) #t) (error "Redefining variable"))
             ((null? (cddr expr)) (return (set_init (cadr expr) 'false s)))
@@ -48,7 +51,7 @@
 ; If it's an expression like (= x (+ 3 y)) set the binding to the
 ;   Mvalue evaluation of the right operand expression.
 (define Mstate_eq-cps
-    (lambda (expr s return)
+    (lambda (expr s return break)
         (if (eq? (get_init (cadr expr) s) 'error)
             (error "Variable assignment before declaration")
             (return (set_binding (cadr expr) (right_op_val expr s)
@@ -60,7 +63,7 @@
 ; Since this doesn't return a state, it's assuming that it is the last thing
 ;    called and that at this point the user wants a value, not a state.
 (define Mstate_return-cps
-    (lambda (expr s return)
+    (lambda (expr s return break)
         (set_binding'return (Mvalue-cps (cadr expr) s (lambda (v) v)) s)
     )
 )
@@ -70,11 +73,11 @@
 ; If it's false, return just the state unchanged if no else statement, and
 ;  Mstate(else-expr) if there is an else statement.
 (define Mstate_if-cps
-  (lambda (expr s return)
+  (lambda (expr s return break)
     (cond
-      ((Mboolean-cps (cadr expr) s (lambda (v) v)) (Mstate-cps (caddr expr) s (lambda (s1) (return s1))))
+      ((Mboolean-cps (cadr expr) s (lambda (v) v)) (Mstate-cps (caddr expr) s return break))
       ((null? (cdddr expr)) (return s))
-      (else (Mstate-cps (cadddr expr) s (lambda (s1) (return s1))))
+      (else (Mstate-cps (cadddr expr) s return break))
       )
     )
   )
@@ -84,8 +87,8 @@
 ;We just feed a new state in front of the other things to "store" them
 
 (define Mstate_begin-cps
-  (lambda (expr s return)
-      (Mstate-cps expr (add_layer s) (lambda (s1) (return (remove_layer s1))))
+  (lambda (expr s return break)
+      (Mstate-cps expr (add_layer s) (lambda (s1) (return (remove_layer s1))) (lambda (s1) (break (remove_layer s1))))
   ))
 
 ;Evaluates a body based on a condition that is true and watches for break
@@ -93,14 +96,15 @@
 ;This part takes care of break and continue statements
 (define Mstate_while-cps
     (lambda (condition body s return)
+      (call/cc (lambda (break)
         (letrec (
-            (loop (lambda (condition body s1)
+            (loop (lambda (condition body s return)
                 (cond
-                    ((Mboolean-cps condition s1 (lambda (v) v))
-                        (Mstate-cps body s1 (lambda (s2) (loop condition body s2))))
-                    (else (return s1))
-            )))) (loop condition body s)
-)))
+                    ((Mboolean-cps condition s (lambda (v) v))
+                        (loop condition body (Mstate-cps body s return break) return))
+                    (else (return s)))
+            ))) (loop condition body s return)
+)))))
 
 ; Can be a number, an atom, or a list
 ; If it's a number, just return the number.
@@ -187,7 +191,7 @@
 
 (define interpret
     (lambda (filename)
-        (letrec ((s (Mstate-cps (parser filename) new_state (lambda (v) v))))
+        (letrec ((s (Mstate-cps (parser filename) new_state (lambda (v) v) (lambda (v) v))))
             (cond
                 ((eq? (get_binding_safe 'return s) #t) 'true)
                 ((eq? (get_binding_safe 'return s) #f) 'false)
