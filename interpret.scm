@@ -24,7 +24,7 @@
       ((equal? (car expr) 'while)               (Mstate_while-cps (cadr expr) (caddr expr) s return))
       ((equal? (car expr) 'begin)               (Mstate_begin-cps (cdr expr) s return break))
       ((equal? (car expr) 'break)               (break s))
-      ((equal? (car expr) 'continue)            s)
+      ((equal? (car expr) 'continue)            (remove_layer s))
 
       
       )))
@@ -156,7 +156,7 @@
             ((equal? (car expr) '>) (return (> (left_op_val expr s) (right_op_val expr s))))
             ((equal? (car expr) '<) (return (< (left_op_val expr s) (right_op_val expr s))))
             ((equal? (car expr) '>=) (return (>= (left_op_val expr s) (right_op_val expr s))))
-            ((equal? (car expr) '>=) (return (>= (left_op_val expr s) (right_op_val expr s))))
+            ((equal? (car expr) '<=) (return (<= (left_op_val expr s) (right_op_val expr s))))
             ((equal? (car expr) '==) (return (eq? (left_op_val expr s) (right_op_val expr s))))
             ((equal? (car expr) '!=) (return (not (eq? (left_op_val expr s) (right_op_val expr s)))))
             (error "Invalid expression for Mboolean")
