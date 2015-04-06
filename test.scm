@@ -1,4 +1,5 @@
 ;Logic necessary to run through test suite
+;Change parser to simple parser!
 (load "interpret.scm")
 (require rackunit)
 
@@ -34,3 +35,5 @@
 (check-exn exn:fail? (lambda () (interpret "tests2/10")))
 (check-eq? (interpret "tests2/11") 12)
 (check-eq? (interpret "tests2/12") 32)
+
+
