@@ -1,4 +1,5 @@
-(load "simpleParser.scm")
+(load "functionParser.scm")
+;(load "simpleParser.scm")
 (load "state_ops.scm")
 
 
@@ -25,9 +26,24 @@
       ((equal? (car expr) 'begin)               (Mstate_begin-cps (cdr expr) s return break))
       ((equal? (car expr) 'break)               (break s))
       ((equal? (car expr) 'continue)            (remove_layer s))
-
+      ((equal? (car expr) 'function)            (funciton_add-cps expr s))
+      (else                                     (Mstate_function_call-cps (fName expr) (fArgs expr) s return break))
       
       )))
+
+; Add the function to the "outer layer"
+(define funciton_add-cps
+  (lambda (functionName args s)
+    '()
+    )
+  )
+    
+; Call the function from the "outer layer"
+(define Mstate_function_call-cps
+  (lambda (functionName args s return break)
+    '()
+    )
+  )
 
 ; Two possibilities.
 ; (var x) has length 2, so cddr will be null and just add x to inittable.
@@ -157,9 +173,6 @@
             ((equal? (car expr) '<) (return (< (left_op_val expr s) (right_op_val expr s))))
             ((equal? (car expr) '>=) (return (>= (left_op_val expr s) (right_op_val expr s))))
             ((equal? (car expr) '<=) (return (<= (left_op_val expr s) (right_op_val expr s))))
-            ((equal? (car expr) '==) (return (eq? (left_op_val expr s) (right_op_val expr s))))
-            ((equal? (car expr) '!=) (return (not (eq? (left_op_val expr s) (right_op_val expr s)))))
-            (error "Invalid expression for Mboolean")
         )
 ))
 
