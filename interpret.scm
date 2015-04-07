@@ -1,65 +1,79 @@
-(load "functionParser.scm")
-;(load "simpleParser.scm")
+;(load "functionParser.scm")
+(load "simpleParser.scm")
 (load "state_ops.scm")
 
+; Kicks off the interpreter
+(define interpret
+  (lambda (filename)
+    ((lambda (result)
+      (cond
+        ((eq? result #t) 'true)
+        ((eq? result #f) 'false)
+        (else result)
+      ))
+    (get_binding 'return (interpret_parse_tree (parser filename) new_state new_return_continuation break_error continue_error)))
+  )
+)
+
+; Abstractions for interpret
+(define new_return_continuation (lambda (v) v))
+(define break_error (lambda (v) (error 'no-loop)))
+(define continue_error (lambda (v) (error 'no-loop)))
+
+; Takes a parse tree generated from Connamacher's parser, and interprets statements one at a time
+(define interpret_parse_tree
+  (lambda (parse_tree state return break continue)
+    (cond
+      ((null? parse_tree) state)
+      (else (interpret_parse_tree (parse_tree_remainder parse_tree) (Mstate-cps (parse_tree_statement parse_tree) state return break continue) return break continue))
+    )
+  )
+)
+
+; Abstractions for interpret_parse_tree
+(define parse_tree_remainder cdr)
+(define parse_tree_statement car)
 
 ; The basic outer Mstate.
-; Iterates through ((expr) (expr) (expr)) and executes each expression
-; in turn, passing its state value along.
-; Returns whatever is returned from the final expression evaluated, which
-; ought to be a return function.
-; If it gets an expression, i.e. (= x 5), rather than a list of expressions,
-; it updates the state as appropriate rather than diving any deeper.
-; If it sees a command it doesnt know how to handle it returns it
+; Takes an expression, i.e. (= x 5), and calls the appropriate function
+;   based on the keyword of the expression
 (define Mstate-cps
-  (lambda (expr s return break)
+  (lambda (expr s return break continue)
     (cond
-      ((null? expr) (return s))
-      ((list? (car expr))                       (Mstate-cps (car expr) s 
-                                                    (lambda (s1) (Mstate-cps (cdr expr) s1
-                                                    (lambda (s2) (return s2)) (lambda (s2) (break s2)))) break))
-      ((equal? (car expr) 'var)                 (Mstate_var-cps expr s return break))
-      ((equal? (car expr) '=)                   (Mstate_eq-cps expr s return break))
-      ((equal? (car expr) 'return)              (Mstate_return-cps expr s return break))
-      ((equal? (car expr) 'if)                  (Mstate_if-cps expr s return break))
-      ((equal? (car expr) 'while)               (Mstate_while-cps (cadr expr) (caddr expr) s return))
-      ((equal? (car expr) 'begin)               (Mstate_begin-cps (cdr expr) s return break))
-      ((equal? (car expr) 'break)               (break s))
-      ((equal? (car expr) 'continue)            (remove_layer s))
-      ((equal? (car expr) 'function)            (funciton_add-cps expr s))
-      (else                                     (Mstate_function_call-cps (fName expr) (fArgs expr) s return break))
-      
-      )))
-
-; Add the function to the "outer layer"
-(define funciton_add-cps
-  (lambda (functionName args s)
-    '()
+      ((equal? (keyword expr) 'var)                 (Mstate_var-cps expr s return))
+      ((equal? (keyword expr) '=)                   (Mstate_eq-cps expr s return))
+      ((equal? (keyword expr) 'return)              (Mstate_return-cps expr s return))
+      ((equal? (keyword expr) 'if)                  (Mstate_if-cps expr s return break continue))
+      ((equal? (keyword expr) 'while)               (Mstate_while-cps expr s return))
+      ((equal? (keyword expr) 'begin)               (Mstate_begin-cps expr s return break continue))
+      ((equal? (keyword expr) 'break)               (break s))
+      ((equal? (keyword expr) 'continue)            (continue s))
     )
   )
-    
-; Call the function from the "outer layer"
-(define Mstate_function_call-cps
-  (lambda (functionName args s return break)
-    '()
-    )
-  )
+)
 
-; Two possibilities.
+; Abstractions for Mstate
+(define keyword car)
+
+; Two possibilities, variable declaration with and without initial value.
 ; (var x) has length 2, so cddr will be null and just add x to inittable.
 ; (var x value) has length 3, so cddr will not be null.
 ; then you add x to inittable and add its calculated value as a binding.
 ; The calculated value is (Mvalue (caddr expr) s) or Mvalue(value)
 ; Init is false if no value, true if there is a value.
 (define Mstate_var-cps
-    (lambda (expr s return break)
+    (lambda (expr s return)
         (cond
-            ((eq? (get_init (cadr expr) s) #t) (error "Redefining variable"))
-            ((null? (cddr expr)) (return (set_init (cadr expr) 'false s)))
-            (else (Mvalue-cps (caddr expr) s (lambda (v) (return (set_binding (cadr expr) v (set_init (cadr expr) #t s))))))
+            ((eq? (get_init (varname expr) s) #t) (error "Redefining variable"))
+            ((null? (cddr expr)) (return (set_init (varname expr) 'false s)))
+            (else (Mvalue-cps (initialvalue expr) s (lambda (v) (return (set_binding (varname expr) v (set_init (varname expr) #t s))))))
         )
     )
 )
+
+; Abstractions for Mstate_var
+(define varname cadr)
+(define initialvalue caddr)
 
 ; Takes (= x 5) and
 ;    if x hasn't been declared, it's not in the init table, so throw an error.
@@ -67,60 +81,99 @@
 ; If it's an expression like (= x (+ 3 y)) set the binding to the
 ;   Mvalue evaluation of the right operand expression.
 (define Mstate_eq-cps
-    (lambda (expr s return break)
-        (if (eq? (get_init (cadr expr) s) 'error)
+    (lambda (expr s return)
+        (if (eq? (get_init (varname expr) s) 'error)
             (error "Variable assignment before declaration")
-            (return (set_binding (cadr expr) (right_op_val expr s)
-                (set_init (cadr expr) #t s)))
+            (return (set_binding (varname expr) (right_op_val expr s)
+                (set_init (varname expr) #t s)))
         )
 ))
 
-; Takes (return (+ 3 x)) and return 3+x, NOT a state!
-; Since this doesn't return a state, it's assuming that it is the last thing
-;    called and that at this point the user wants a value, not a state.
+; Adds the return value into the state under name 'return
 (define Mstate_return-cps
-    (lambda (expr s return break)
-        (set_binding'return (Mvalue-cps (cadr expr) s (lambda (v) v)) s)
-    )
+  (lambda (expr s return)
+    (set_binding 'return (Mvalue-cps (returnexpr expr) s (lambda (v) v)) s)
+  )
 )
+
+; Abstractions for Mstate return
+(define returnexpr cadr)
 
 ; Takes (if (cond) (then-expr) (else-expr))
 ; First evaluates the boolean condition.  If it's true, return Mstate(then-expr)
 ; If it's false, return just the state unchanged if no else statement, and
 ;  Mstate(else-expr) if there is an else statement.
 (define Mstate_if-cps
-  (lambda (expr s return break)
+  (lambda (expr s return break continue)
     (cond
-      ((Mboolean-cps (cadr expr) s (lambda (v) v)) (Mstate-cps (caddr expr) s return break))
-      ((null? (cdddr expr)) (return s))
-      (else (Mstate-cps (cadddr expr) s return break))
-      )
+      ((Mboolean-cps (ifcond expr) s (lambda (v) v)) (Mstate-cps (iftruebody expr) s return break continue))
+      ((null? (ifnoelse expr)) s)
+      (else (Mstate-cps (iffalsebody expr) s return break continue))
     )
   )
+)
 
-;Takes a begin statement
-;This is where layers of code are computed
-;We just feed a new state in front of the other things to "store" them
+; Abstractions for if
+(define ifcond cadr)
+(define iftruebody caddr)
+(define ifnoelse cdddr)
+(define iffalsebody cadddr)
 
+; Takes a begin statement
+; This is where layers of code are computed
 (define Mstate_begin-cps
-  (lambda (expr s return break)
-      (Mstate-cps expr (add_layer s) (lambda (s1) (return (remove_layer s1))) (lambda (s1) (break (remove_layer s1))))
-  ))
+  (lambda (expr s return break continue)
+    (remove_layer (interpret_parse_tree (begin_body expr) (add_layer s) return (break_layer break) (continue_layer continue)))
+  )
+)
+
+; Abstractions for layers
+(define begin_body cdr)
+
+(define break_layer
+  (lambda (break)
+    (lambda (s)
+      (break (remove_layer s))
+    )
+  )
+)
+
+(define continue_layer
+  (lambda (continue)
+    (lambda (s)
+      (continue (remove_layer s))
+    )
+  )
+)
 
 ;Evaluates a body based on a condition that is true and watches for break
 ;Takes (< i j) (= i (+ i 1)) s and return
 ;This part takes care of break and continue statements
 (define Mstate_while-cps
-    (lambda (condition body s return)
+    (lambda (expr s return)
       (call/cc (lambda (break)
         (letrec (
-            (loop (lambda (condition body s return)
+            (loop (lambda (expr s)
                 (cond
-                    ((Mboolean-cps condition s (lambda (v) v))
-                        (loop condition body (Mstate-cps body s return (lambda(s_out) (break(return s_out)))) return))
-                    (else (return s)))
-            ))) (loop condition body s return)
-)))))
+                    ((Mboolean-cps (whilecond expr) s (lambda (v) v))
+                        (loop expr (Mstate-cps (whilebody expr) s return break (continue loop expr return break))))
+                    (else (break s)))
+            ))) (loop expr s)
+      )
+    ))
+  )
+)
+
+; Abstractions for while
+(define whilecond cadr)
+(define whilebody caddr)
+(define continue
+  (lambda (loop expr return break)
+    (lambda (state)
+      (break (loop expr state))
+    )
+  )
+)
 
 ; Can be a number, an atom, or a list
 ; If it's a number, just return the number.
@@ -137,18 +190,20 @@
         (cond
             ((number? expr) (return expr))
             ((not (list? expr)) (return (get_binding_safe expr s)))
-            ((equal? (car expr) '+) (return (+ (left_op_val expr s) (right_op_val expr s))))
-            ((equal? (car expr) '-)
+            ((equal? (operator expr) '+) (return (+ (left_op_val expr s) (right_op_val expr s))))
+            ((equal? (operator expr) '-)
                 (if (null? (cddr expr)) 
                     (return (- 0 (left_op_val expr s)))
                     (return (- (left_op_val expr s) (right_op_val expr s)))))
-            ((equal? (car expr) '*) (return (* (left_op_val expr s) (right_op_val expr s))))
-            ((equal? (car expr) '/) (return (/ (- (left_op_val expr s) (modulo (left_op_val expr s) (right_op_val expr s))) (right_op_val expr s)))) ; Integer division:  (x - (x % y)) / y
-            ((equal? (car expr) '%) (return (modulo (left_op_val expr s) (right_op_val expr s))))
-            ((logical_operator? (car expr)) (Mboolean-cps expr s (lambda (v) (return v))))
+            ((equal? (operator expr) '*) (return (* (left_op_val expr s) (right_op_val expr s))))
+            ((equal? (operator expr) '/) (return (/ (- (left_op_val expr s) (modulo (left_op_val expr s) (right_op_val expr s))) (right_op_val expr s)))) ; Integer division:  (x - (x % y)) / y
+            ((equal? (operator expr) '%) (return (modulo (left_op_val expr s) (right_op_val expr s))))
+            ((logical_operator? (operator expr)) (Mboolean-cps expr s (lambda (v) (return v))))
             (error "Invalid expression for Mvalue")
         )
 ))
+
+(define operator car)
 
 ; Returns the value of the boolean expression expr.
 ; If expr is #t or #f, just return those.
@@ -158,7 +213,6 @@
 ;    with the Mbooleans of the operands (or operand if it's not)
 ; and if it's an arithmetic comparison, do the corresponding scheme expression
 ;    with the Mvalues of the operands.
-; NOTE that this uses #t and #f, do we need to use true and false?
 (define Mboolean-cps
     (lambda (expr s return)
         (cond
@@ -168,11 +222,13 @@
             ((not (list? expr)) (return (get_binding_safe expr s)))
             ((equal? (car expr) '||) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (or v1 v2)))))))
             ((equal? (car expr) '&&) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (and v1 v2)))))))
+            ((equal? (car expr) '!=) (return (not (equal? (left_op_val expr s) (right_op_val expr s)))))
             ((equal? (car expr) '!) (Mboolean-cps (cadr expr) s (lambda (v) (return (not v)))))
             ((equal? (car expr) '>) (return (> (left_op_val expr s) (right_op_val expr s))))
             ((equal? (car expr) '<) (return (< (left_op_val expr s) (right_op_val expr s))))
             ((equal? (car expr) '>=) (return (>= (left_op_val expr s) (right_op_val expr s))))
             ((equal? (car expr) '<=) (return (<= (left_op_val expr s) (right_op_val expr s))))
+            ((equal? (car expr) '==) (return (equal? (left_op_val expr s) (right_op_val expr s))))
         )
 ))
 
@@ -200,15 +256,4 @@
             ((equal? op '!) #t)
             (else 'false)
         )
-))
-
-(define interpret
-    (lambda (filename)
-            (cond
-                ((eq? (get_binding 'return (Mstate-cps (parser filename) new_state (lambda (v) v) (lambda (v1) v1))) #t) 'true)
-                ((eq? (get_binding 'return (Mstate-cps (parser filename) new_state (lambda (v) v) (lambda (v1) v1))) #f) 'false)
-                ((eq? (get_binding 'return (Mstate-cps (parser filename) new_state (lambda (v) v) (lambda (v1) v1))) 'error) (error "Undefined Variable"));this is returned when we dont see a return in the state
-                (else (get_binding 'return (Mstate-cps (parser filename) new_state (lambda (v) v) (lambda (v1) v1))))
-            )
-            
 ))

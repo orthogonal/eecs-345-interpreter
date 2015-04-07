@@ -23,6 +23,8 @@
 (check-eq? (interpret "tests/18") 'true)
 (check-eq? (interpret "tests/p1test1") 200)
 
+(display "passed all of tests1\n")
+
 (check-eq? (interpret "tests2/1") 100)
 (check-eq? (interpret "tests2/2") 20)
 (check-eq? (interpret "tests2/3") 6)
@@ -36,4 +38,4 @@
 (check-eq? (interpret "tests2/11") 12)
 (check-eq? (interpret "tests2/12") 32)
 
-
+(display "passed all of tests2\n")

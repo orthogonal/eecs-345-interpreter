@@ -1,6 +1,3 @@
-
-
-
 ; ========== BASIC LIST OPERATIONS ==========
 ; Applicable for any key-value pair list.
 
