@@ -1,18 +1,82 @@
-;(load "functionParser.scm")
-(load "simpleParser.scm")
+(load "functionParser.scm")
+;(load "simpleParser.scm")
 (load "state_ops.scm")
 
 ; Kicks off the interpreter
 (define interpret
   (lambda (filename)
-    ((lambda (result)
-      (cond
+    (prettify_result
+     (get_binding 'return 
+      (interpret_parse_tree (parser filename) new_state new_return_continuation break_error continue_error)
+     )
+    )
+  )
+)
+
+(define prettify_result
+  (lambda (result)
+    (cond
         ((eq? result #t) 'true)
         ((eq? result #f) 'false)
         (else result)
-      ))
-    (get_binding 'return (interpret_parse_tree (parser filename) new_state new_return_continuation break_error continue_error)))
+    )
   )
+)
+
+(define initial_environment 
+  (lambda (parse_tree)
+    (interpret_outer_parse_tree parse_tree new_state new_return_continuation)
+  )
+)
+
+; Shows how to get the function closure for main, then get correct environment out of the function closure
+(define outer_interpret
+  (lambda (filename)
+    ((caddr (get_binding 'main (initial_environment (parser filename)))) (initial_environment (parser filename))) 
+  )
+)
+
+(define interpret_outer_parse_tree
+  (lambda (parse_tree state return)
+    (cond
+      ((null? parse_tree) state)
+      (else (interpret_outer_parse_tree (parse_tree_remainder parse_tree) (Mstate_outer (parse_tree_statement parse_tree) state return) return))
+    )
+  )
+)
+
+(define Mstate_outer
+  (lambda (expr s return)
+    (cond
+      ((equal? (keyword expr) 'var)       (Mstate_var-cps expr s return))
+      ((equal? (keyword expr) '=)         (Mstate_eq-cps expr s return))
+      ((equal? (keyword expr) 'function)  (Mstate_function_def-cps expr s return))
+    )
+  )
+)
+
+(define Mstate_function_def-cps
+  (lambda (expr s return)
+    (return (set_binding (functionname expr) (make_closure expr s) s))
+  )
+)
+
+(define functionname cadr)
+(define arglist cddr)
+(define functionbody cadddr)
+
+(define make_closure
+  (lambda (expr s)
+    (list (arglist expr) (functionbody expr) (functionenvironment (functionname expr)))
+  )
+)
+
+(define functionenvironment
+ (lambda (name)
+  (lambda (state)
+    (everything_after name state)
+  )
+ )
 )
 
 ; Abstractions for interpret
@@ -64,9 +128,10 @@
 (define Mstate_var-cps
     (lambda (expr s return)
         (cond
-            ((eq? (get_init (varname expr) s) #t) (error "Redefining variable"))
-            ((null? (cddr expr)) (return (set_init (varname expr) 'false s)))
-            (else (Mvalue-cps (initialvalue expr) s (lambda (v) (return (set_binding (varname expr) v (set_init (varname expr) #t s))))))
+            ((defined? (varname expr) s) (error "Redefining variable"))
+            ;((null? (cddr expr)) (return (set_init (varname expr) 'false s)))
+            ((null? (cddr expr)) (return s))
+            (else (Mvalue-cps (initialvalue expr) s (lambda (v) (return (set_binding (varname expr) v s)))))
         )
     )
 )
@@ -76,18 +141,16 @@
 (define initialvalue caddr)
 
 ; Takes (= x 5) and
-;    if x hasn't been declared, it's not in the init table, so throw an error.
-;    set the binding of x to 5.
 ; If it's an expression like (= x (+ 3 y)) set the binding to the
 ;   Mvalue evaluation of the right operand expression.
 (define Mstate_eq-cps
-    (lambda (expr s return)
-        (if (eq? (get_init (varname expr) s) 'error)
-            (error "Variable assignment before declaration")
-            (return (set_binding (varname expr) (right_op_val expr s)
-                (set_init (varname expr) #t s)))
-        )
-))
+  (lambda (expr s return)
+;    (if (eq? (get_init (varname expr) s) 'error)
+;      (error "Variable assignment before declaration")
+      (return (set_binding (varname expr) (right_op_val expr s) s))
+;    )
+  )
+)
 
 ; Adds the return value into the state under name 'return
 (define Mstate_return-cps
