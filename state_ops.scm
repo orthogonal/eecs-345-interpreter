@@ -4,107 +4,74 @@
 ; Step through a table represented as ((var val) (var val) (var val))
 ; If the name of the var matches the var argument, return val
 ; If it's not in the table return 'error
-(define table_search
-    (lambda (var table)
+(define layer_search
+    (lambda (var layer)
         (cond
-            ((null? table) 'error)
-            ((eq? var (car (car table))) (cadr (car table)))
-            (else (table_search var (cdr table)))
+            ((null? layer) 'error)
+            ((eq? var (car (car layer))) (cadr (car layer)))
+            (else (layer_search var (cdr layer)))
 )))
+
+; Searches for the first occurence of a variable in the state and returns its value
+(define state_search
+  (lambda (var state)
+    (cond
+      ((null? state) 'error)
+      ((eq? (layer_search var (top_layer state)) 'error) (state_search var (remove_layer state)))
+      (else (layer_search var (top_layer state)))
+    )
+  )
+)
 
 ; Add a (key value) to the table which is ((key value) (key value) ... )
 ; So i.e. ((a, 5) (b, 6)) -> ((c, 7) (a, 5) (b, 6)) with args c, 7.
-(define add
-    (lambda (key value table)
-        (cons (cons key (cons value '())) table)
-))
+(define add_to_layer
+  (lambda (key value layer)
+    (cons (list key value) layer)
+  )
+)
+
+; Adds a variable's value to the top_layer of a state
+(define add_to_state
+  (lambda (key value state)
+    (cons (add_to_layer key value (top_layer state)) (remove_layer state))
+  )
+)
 
 ; Take a table which is ((key1 value) (key2 value) ...)
-; and return ((key2 value) ...) if it was (delete-cps key1 table)
-(define delete
-    (lambda (key table)
+; and return ((key2 value) ...) if it was (delete key1 table)
+(define delete_from_layer
+    (lambda (key layer)
         (cond
-            ((null? table) '())
-            ((eq? key (car (car table))) (cdr table))
-            (else (cons (car table) (delete key (cdr table))))
+            ((null? layer) '())
+            ((eq? key (car (car layer))) (cdr layer))
+            (else (cons (car layer) (delete_from_layer key (cdr layer))))
 )))
 
-; Union of two tables
-; Add (key val) from table1 to the front of a version of table2 that does not
-; have key in it.  This version of table2 also has already recursively added
-; the rest of the keys in table1 to itself.
-; i.e. ((a 5) (b 3)) ((d 6) (a 3)) -> ((a 5) (b 3) (d 6))
-(define union-cps
-    (lambda (table1 table2 return)
-        (cond
-            ((null? table1) (return table2))
-            (else (union-cps (cdr table1) table2 (lambda (t2) (cons (car table1)
-                (delete-cps (car (car table1)) t2 (lambda (v) (return v)))))))
-        )))
-
-; Update the first item on a list
-(define update_first
-    (lambda (new_value list)
-        (cons new_value (cdr list))
-))
-
-; Update the second item on a list
-(define update_second
-    (lambda (new_value list)
-        (cons (car list) (update_first new_value (cdr list)))
-))
-
-; Update the third item on a list
-(define update_third
-    (lambda (new_value list)
-        (cons (car list) (update_second new_value (cdr list)))
-))
-
-
-; ========== STATE MANIPULATION ==========
-; Changing particular things within a state
-
+; Sets a variable's value in a state
 (define set_binding
-    (lambda (key value s)
-      (cond
-        ((eq? 'error (get_binding key s)) (update_first (update_bindings (add key value (delete key (bindings (car s)))) (car s)) s))
-        ((not (eq? 'error (get_binding_layer key (car s)))) (update_first (update_bindings (add key value (delete key (bindings (car s)))) (car s)) s))
-        (else (cons (car s) (set_binding key value (cdr s))))
-      )
-))
+  (lambda (key value s)
+    (cond
+      ((eq? 'error (get_binding key s)) (add_to_state key value s))
+      ((not (eq? 'error (get_binding_layer key (top_layer s)))) (add_to_state key value (cons (delete_from_layer key (top_layer s)) (remove_layer s))))
+      (else (cons (top_layer s) (set_binding key value (remove_layer s))))
+    )
+  )
+)
 
-(define set_init
-    (lambda (key value s)
-        (cond
-            ((eq? 'error (get_init key s)) (update_first (update_inittable (add key value (delete key (inittable (car s)))) (car s)) s))
-            ((not (eq? 'error (get_init_layer key (car s)))) (update_first (update_inittable (add key value (delete key (inittable (car s)))) (car s)) s))
-            (else (cons (car s) (set_init key value (cdr s))))
-        )
-))
-
+; Gets a variables value inside a given state
 (define get_binding
-    (lambda (key s)
-        (table_search
-            key (all_bindings s))
-))
+  (lambda (key s)
+    (state_search key s)
+  )
+)
 
+; Gets a variables value inside a given layer
 (define get_binding_layer
-    (lambda (key layer)
-        (table_search
-            key (bindings layer))
-))
-
-
- (define get_init
-   (lambda (key s)
-     (table_search
-       key (all_inittable s))))
-
-(define get_init_layer
-    (lambda (key layer)
-        (table_search
-            key (inittable layer))
-))
+  (lambda (key layer)
+    (layer_search key layer)
+  )
+)
 
 ; Throw an error if the binding is not there.
 (define get_binding_safe
@@ -114,71 +81,52 @@
             (get_binding key s)
 )))
 
-
-; ========== DEFINITIONS ==========
-; Change these to restructure state
-(define bindings 
-  (lambda (layer)
-    (car layer)))
-
-(define all_bindings
-    (lambda (s)
-      (cond
-        ((null? s) '())
-        (else (append (bindings (top_layer s)) (all_bindings (cdr s))))
-      )
-    )
-)
-
-(define update_bindings
-    (lambda (new_bindings layer)
-        (update_first new_bindings layer)))
-
-(define inittable
-  (lambda (layer)
-    (cadr layer)))
-
-(define all_inittable
-    (lambda (s)
-      (cond
-        ((null? s) '())
-        (else (append (inittable (top_layer s)) (all_inittable (cdr s))))
-      )
-    )
-)
-
-(define update_inittable
-    (lambda (new_inittable layer)
-      (update_second new_inittable layer)))
-        
-
-(define new_layer '( () () ))
-
-; State stored as a list of layers. Each layer contains two tables: bindings and inittable
-; Each table is stored as a list of pairs (var val)
-(define new_state (list new_layer))
-
-(define top_layer
-  (lambda (s)
-    (car s)
+; Checks if a given key has been initialized
+(define defined?
+  (lambda (key s)
+    (not (eq? (state_search key s) 'error))
   )
 )
 
+; Returns the remainder of a layer, after a given key
+(define everything_after_layer
+  (lambda (key layer)
+    (cond 
+      ((null? layer) new_layer)
+      ((eq? (car (car layer)) key) (cdr layer))
+      (else (everything_after_layer key (cdr layer)))
+    )
+  )
+)
+
+; Returns the remainder of a state, after a given key
+(define everything_after
+  (lambda (key s)
+    (cond
+      ((null? s) new_state)
+      ((eq? (layer_search key (top_layer s)) 'error) (everything_after key (remove_layer s)))
+      (else (cons (everything_after_layer key (top_layer s)) (remove_layer s)))
+    )
+  )
+)
+
+; State stored as a list of layers. Each layer contains two tables: bindings and inittable
+; Each table is stored as a list of pairs (var val)
+(define new_layer '())
+(define new_state (list new_layer))
+
+; Some state/layer abstractions
+(define top_layer car)
 (define add_layer
   (lambda (s)
     (cons new_layer s)
   )
 )
-
-(define remove_layer
-  (lambda (s) 
-    (cdr s)
-  )
-)
-
+(define remove_layer cdr)
 
 ; ==== TEST CODE ====
 ;(delete-cps 'a '((e 4) (b 5) (y 6) (a 7)) (lambda (v) v))
 ;(union '((x 5) (y 6) (a 7)) '((e 4) (b 5) (y 6) (a 7)))
-;(get_binding 'x (set_binding 'x 5 (set_binding 'y 4 (set_binding 'x 2 new_state))))
+;new_state
+;(set_binding 'z  4 (add_layer (set_binding 'x 5 (set_binding 'y 4 (set_binding 'x 2 new_state)))))
 ;(M_state '(= x z ) (remove_layer (set_binding 'z 2 (set_binding 'y 3 (add_layer (set_init 'x #t (set_binding 'y 2 (set_binding 'w 4 new_state))))))))
