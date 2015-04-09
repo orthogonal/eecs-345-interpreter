@@ -6,9 +6,7 @@
 (define interpret
   (lambda (filename)
     (prettify_result
-     (get_binding 'return 
-      (interpret_parse_tree (parser filename) new_state new_return_continuation break_error continue_error)
-     )
+      (interpret_main filename)
     )
   )
 )
@@ -161,6 +159,8 @@
       ((equal? (keyword expr) 'if)                  (Mstate_if-cps expr s return break continue))
       ((equal? (keyword expr) 'while)               (Mstate_while-cps expr s return))
       ((equal? (keyword expr) 'begin)               (Mstate_begin-cps expr s return break continue))
+      ((equal? (keyword expr) 'funcall)             (Mstate_function_call-cps expr s return))
+      ((equal? (keyword expr) 'function)            (Mstate_function_def-cps expr s return))
       ((equal? (keyword expr) 'break)               (break s))
       ((equal? (keyword expr) 'continue)            (continue s))
     )
@@ -313,6 +313,7 @@
             ((equal? (operator expr) '/) (return (/ (- (left_op_val expr s) (modulo (left_op_val expr s) (right_op_val expr s))) (right_op_val expr s)))) ; Integer division:  (x - (x % y)) / y
             ((equal? (operator expr) '%) (return (modulo (left_op_val expr s) (right_op_val expr s))))
             ((logical_operator? (operator expr)) (Mboolean-cps expr s (lambda (v) (return v))))
+            ((equal? (operator expr) 'funcall) (return (Mvalue_function_call-cps expr s)))
             (error "Invalid expression for Mvalue")
         )
 ))
@@ -372,4 +373,7 @@
         )
 ))
 
-;(Mvalue_function_call-cps '(funcall fib 1) (initial_environment (parser "tests3/4")) new_return_continuation)
+;(Mvalue_function_call-cps '(funcall fib 1) (initial_environment (parser "tests3/1")) new_return_continuation)
+(Mvalue_function_call-cps '(funcall fib 1) (initial_environment (parser "tests3/4")) new_return_continuation)
+(interpret_main "tests3/1")
+(interpret "tests3/1")
