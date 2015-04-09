@@ -13,6 +13,7 @@
   )
 )
 
+; Converts #t to true and #f to false before returning
 (define prettify_result
   (lambda (result)
     (cond
@@ -23,12 +24,6 @@
   )
 )
 
-(define initial_environment 
-  (lambda (parse_tree)
-    (interpret_outer_parse_tree parse_tree new_state new_return_continuation)
-  )
-)
-
 ; Shows how to get the function closure for main, then get correct environment out of the function closure
 (define outer_interpret
   (lambda (filename)
@@ -36,6 +31,14 @@
   )
 )
 
+; Creates the "outer state" by making a first pass on the parse tree, then adds a new layer to it
+(define initial_environment 
+  (lambda (parse_tree)
+    (new_layer (interpret_outer_parse_tree parse_tree new_state new_return_continuation))
+  )
+)
+
+; First pass of parse tree to build "outer state"
 (define interpret_outer_parse_tree
   (lambda (parse_tree state return)
     (cond
@@ -45,36 +48,45 @@
   )
 )
 
+; Takes a function closure and returns a function to return that function's environment
+(define get_function_environment caddr)
+
+; Mstate function for building the outer state. Only variable definitions, variable assignment, and function definitions are allowed outside of a function
 (define Mstate_outer
   (lambda (expr s return)
     (cond
       ((equal? (keyword expr) 'var)       (Mstate_var-cps expr s return))
       ((equal? (keyword expr) '=)         (Mstate_eq-cps expr s return))
       ((equal? (keyword expr) 'function)  (Mstate_function_def-cps expr s return))
+      (else (return state))
     )
   )
 )
 
+; Adds an entry to the state of (function_name function_closure)
 (define Mstate_function_def-cps
   (lambda (expr s return)
     (return (set_binding (functionname expr) (make_closure expr s) s))
   )
 )
 
+; Some abstractions for parsing out the pieces of a function definition expression
 (define functionname cadr)
 (define arglist cddr)
 (define functionbody cadddr)
 
+; Function closure is (formal_parameters, function_body, function_that_creates_function_environment)
 (define make_closure
   (lambda (expr s)
     (list (arglist expr) (functionbody expr) (functionenvironment (functionname expr)))
   )
 )
 
+; Returns a function that generates a function environment given the current state
 (define functionenvironment
  (lambda (name)
   (lambda (state)
-    (everything_after name state)
+    (state_remainder name state)
   )
  )
 )
