@@ -74,7 +74,7 @@
     
     (get_binding 'return 
       (interpret_parse_tree
-       (get_function_body (get_closure expr s)) (bind_parameters (get_actual_params expr) (get_formal_params (get_closure expr s)) (get_function_environment expr s) return) new_return_continuation continue_error break_error))
+       (get_function_body (get_closure expr s)) (bind_parameters (get_actual_params expr) (get_formal_params (get_closure expr s)) s return) new_return_continuation continue_error break_error))
   )
 )
 
@@ -312,8 +312,8 @@
             ((equal? (operator expr) '*) (return (* (left_op_val expr s) (right_op_val expr s))))
             ((equal? (operator expr) '/) (return (/ (- (left_op_val expr s) (modulo (left_op_val expr s) (right_op_val expr s))) (right_op_val expr s)))) ; Integer division:  (x - (x % y)) / y
             ((equal? (operator expr) '%) (return (modulo (left_op_val expr s) (right_op_val expr s))))
+            ((equal? (operator expr) 'funcall) (Mvalue_function_call-cps expr s (lambda (v) (return v))))
             ((logical_operator? (operator expr)) (Mboolean-cps expr s (lambda (v) (return v))))
-            ((equal? (operator expr) 'funcall) (return (Mvalue_function_call-cps expr s)))
             (error "Invalid expression for Mvalue")
         )
 ))
@@ -369,7 +369,8 @@
             ((equal? op '==) #t)
             ((equal? op '!=) #t)
             ((equal? op '!) #t)
-            (else 'false)
+            (else #f)
         )
 ))
 
+(interpret "tests3/5")
