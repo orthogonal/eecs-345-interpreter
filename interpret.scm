@@ -24,17 +24,17 @@
   )
 )
 
-; Shows how to get the function closure for main, then get correct environment out of the function closure
-(define outer_interpret
-  (lambda (filename)
-    ((caddr (get_binding 'main (initial_environment (parser filename)))) (initial_environment (parser filename))) 
-  )
-)
-
 ; Creates the "outer state" by making a first pass on the parse tree, then adds a new layer to it
 (define initial_environment 
   (lambda (parse_tree)
-    (new_layer (interpret_outer_parse_tree parse_tree new_state new_return_continuation))
+    (add_layer (interpret_outer_parse_tree parse_tree new_state new_return_continuation))
+  )
+)
+
+; Runs the main function
+(define interpret_main
+  (lambda (filename)
+    (Mvalue_function_call-cps '(funcall main) (initial_environment (parser filename)) new_return_continuation)
   )
 )
 
@@ -48,8 +48,12 @@
   )
 )
 
-; Takes a function closure and returns a function to return that function's environment
-(define get_function_environment caddr)
+; Gets environment function from function closure and calls it with a state to return function environment
+(define get_function_environment
+  (lambda (expr s)
+    ((caddr (get_closure expr s)) s)
+   )
+ )
 
 ; Mstate function for building the outer state. Only variable definitions, variable assignment, and function definitions are allowed outside of a function
 (define Mstate_outer
@@ -63,6 +67,41 @@
   )
 )
 
+(define Mvalue_function_call-cps
+  (lambda (expr s return)
+    ;DONE get function environment
+    ;DONE evaluate each actual parameter and bind it to formal parameter (binding goes in function environment)
+    ;DONE interpret the body of the function with the function environment
+    ;TODO use boxes to allow for global variable side effects
+    
+    (get_binding 'return 
+      (interpret_parse_tree
+       (get_function_body (get_closure expr s)) (bind_parameters (get_actual_params expr) (get_formal_params (get_closure expr s)) (get_function_environment expr s) return) new_return_continuation continue_error break_error))
+  )
+)
+
+(define get_formal_params car)
+(define get_function_body cadr)
+(define get_actual_params cddr)
+
+; Evaluates the actual params and binds their values to the formal params
+; Isn't actually cps
+(define bind_parameters
+  (lambda (actual_params formal_params s return)
+    (cond
+      ((null? actual_params) (return s))
+      (else (bind_parameters (cdr actual_params) (cdr formal_params) (set_binding (car formal_params) (Mvalue-cps (car actual_params) s return) s) return))
+    )
+  )
+)
+
+; Looks up and returns function closure from state
+(define get_closure
+  (lambda (expr s)
+    (get_binding (functionname expr) s)
+  )
+)
+
 ; Adds an entry to the state of (function_name function_closure)
 (define Mstate_function_def-cps
   (lambda (expr s return)
@@ -72,7 +111,7 @@
 
 ; Some abstractions for parsing out the pieces of a function definition expression
 (define functionname cadr)
-(define arglist cddr)
+(define arglist caddr)
 (define functionbody cadddr)
 
 ; Function closure is (formal_parameters, function_body, function_that_creates_function_environment)
@@ -332,3 +371,5 @@
             (else 'false)
         )
 ))
+
+;(Mvalue_function_call-cps '(funcall fib 1) (initial_environment (parser "tests3/4")) new_return_continuation)
