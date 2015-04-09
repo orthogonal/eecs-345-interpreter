@@ -105,7 +105,7 @@
     (cond
       ((null? s) new_state)
       ((eq? (layer_search key (top_layer s)) 'error) (state_remainder key (remove_layer s)))
-      (else (cons (state_remainder_layer key (top_layer s)) (remove_layer s)))
+      (else (cons (layer_remainder key (top_layer s)) (remove_layer s)))
     )
   )
 )
