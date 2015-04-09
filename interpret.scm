@@ -373,7 +373,3 @@
         )
 ))
 
-;(Mvalue_function_call-cps '(funcall fib 1) (initial_environment (parser "tests3/1")) new_return_continuation)
-(Mvalue_function_call-cps '(funcall fib 1) (initial_environment (parser "tests3/4")) new_return_continuation)
-(interpret_main "tests3/1")
-(interpret "tests3/1")
