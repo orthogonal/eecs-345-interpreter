@@ -89,23 +89,23 @@
 )
 
 ; Returns the remainder of a layer, after a given key
-(define everything_after_layer
+(define layer_remainder
   (lambda (key layer)
     (cond 
       ((null? layer) new_layer)
-      ((eq? (car (car layer)) key) (cdr layer))
-      (else (everything_after_layer key (cdr layer)))
+      ((eq? (car (car layer)) key) layer)
+      (else (layer_remainder key (cdr layer)))
     )
   )
 )
 
 ; Returns the remainder of a state, after a given key
-(define everything_after
+(define state_remainder
   (lambda (key s)
     (cond
       ((null? s) new_state)
-      ((eq? (layer_search key (top_layer s)) 'error) (everything_after key (remove_layer s)))
-      (else (cons (everything_after_layer key (top_layer s)) (remove_layer s)))
+      ((eq? (layer_search key (top_layer s)) 'error) (state_remainder key (remove_layer s)))
+      (else (cons (state_remainder_layer key (top_layer s)) (remove_layer s)))
     )
   )
 )
