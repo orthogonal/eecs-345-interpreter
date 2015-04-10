@@ -121,6 +121,17 @@
   )
 )
 
+; Calls a function but doesn't do anything with what it returns; instead calls return continuation on the updated state.
+(define Mstate_function_call-cps
+  (lambda (expr s return)
+    (return
+      (remove_layer
+        (interpret_parse_tree
+          (get_function_body (get_closure expr s))
+          (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure expr s)) (add_layer s) new_return_continuation)
+          new_return_continuation continue_error break_error)))
+))
+
 ; Some abstractions for parsing out the pieces of a function definition expression
 (define functionname cadr)
 (define arglist caddr)
@@ -532,6 +543,6 @@
 (define remove_layer cdr)
 
 
-(interpret "tests3/7")
+(interpret "tests3/10")
 
 
