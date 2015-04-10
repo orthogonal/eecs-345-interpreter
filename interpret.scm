@@ -194,7 +194,7 @@
 (define Mstate_var-cps
     (lambda (expr s return)
         (cond
-            ((defined? (varname expr) s) (error "Redefining variable"))
+            ((defined_in_layer? (varname expr) s) (error "Redefining variable"))
             ;((null? (cddr expr)) (return (set_init (varname expr) 'false s)))
             ((null? (cddr expr)) (return s))
             (else (Mvalue-cps (initialvalue expr) s (lambda (v) (return (set_binding (varname expr) v s)))))
@@ -482,6 +482,13 @@
   )
 )
 
+; Checks if a given key has been initialized
+(define defined_in_layer?
+  (lambda (key s)
+    (not (eq? (layer_search key (top_layer s)) 'error))
+  )
+)
+
 ; Returns the remainder of a layer, after a given key
 (define layer_remainder
   (lambda (key layer)
@@ -518,6 +525,6 @@
 (define remove_layer cdr)
 
 
-(interpret "tests3/5")
+(interpret "tests3/6")
 
 
