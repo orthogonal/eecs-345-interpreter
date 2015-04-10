@@ -328,6 +328,8 @@
     (lambda (expr s return)
         (cond
             ((number? expr) (return expr))
+            ((equal? expr 'true) (return #t))
+            ((equal? expr 'false) (return #f))
             ((not (list? expr)) (return (get_binding_safe expr s)))
             ((equal? (operator expr) '+) (return (+ (left_op_val expr s) (right_op_val expr s))))
             ((equal? (operator expr) '-)
@@ -369,6 +371,11 @@
             ((equal? (car expr) '>=) (return (>= (left_op_val expr s) (right_op_val expr s))))
             ((equal? (car expr) '<=) (return (<= (left_op_val expr s) (right_op_val expr s))))
             ((equal? (car expr) '==) (return (equal? (left_op_val expr s) (right_op_val expr s))))
+            ((equal? (car expr) 'funcall) (Mvalue_function_call-cps expr s (lambda (v)
+                (cond
+                    ((equal? v 'true) (return #t))
+                    ((equal? v 'false) (return #f))
+                    (return v)))))
         )
 ))
 
@@ -525,6 +532,6 @@
 (define remove_layer cdr)
 
 
-(interpret "tests3/6")
+(interpret "tests3/7")
 
 
