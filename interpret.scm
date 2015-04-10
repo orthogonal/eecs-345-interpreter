@@ -1,6 +1,6 @@
 (load "functionParser.scm")
 ;(load "simpleParser.scm")
-(load "state_ops.scm")
+;(load "state_ops.scm")
 
 ; Kicks off the interpreter
 (define interpret
@@ -25,7 +25,7 @@
 ; Creates the "outer state" by making a first pass on the parse tree, then adds a new layer to it
 (define initial_environment 
   (lambda (parse_tree)
-    (add_layer (interpret_outer_parse_tree parse_tree new_state new_return_continuation))
+    (add_layer (interpret_outer_parse_tree-cps parse_tree new_state new_return_continuation))
   )
 )
 
@@ -37,11 +37,11 @@
 )
 
 ; First pass of parse tree to build "outer state"
-(define interpret_outer_parse_tree
+(define interpret_outer_parse_tree-cps
   (lambda (parse_tree state return)
     (cond
-      ((null? parse_tree) state)
-      (else (interpret_outer_parse_tree (parse_tree_remainder parse_tree) (Mstate_outer (parse_tree_statement parse_tree) state return) return))
+      ((null? parse_tree) (return state))
+      (else (interpret_outer_parse_tree-cps (parse_tree_remainder parse_tree) (Mstate_outer-cps (parse_tree_statement parse_tree) state new_return_continuation) return))
     )
   )
 )
@@ -54,7 +54,7 @@
  )
 
 ; Mstate function for building the outer state. Only variable definitions, variable assignment, and function definitions are allowed outside of a function
-(define Mstate_outer
+(define Mstate_outer-cps
   (lambda (expr s return)
     (cond
       ((equal? (keyword expr) 'var)       (Mstate_var-cps expr s return))
@@ -72,11 +72,18 @@
     ;DONE interpret the body of the function with the function environment
     ;TODO use boxes to allow for global variable side effects
     
-    (get_binding 'return 
-      (interpret_parse_tree
-       (get_function_body (get_closure expr s)) (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure expr s)) s return) new_return_continuation continue_error break_error))
-  )
-)
+    (return
+        (get_binding 'return
+            (interpret_parse_tree
+                (get_function_body (get_closure expr s))
+                (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure expr s)) (add_layer s) new_return_continuation)
+                new_return_continuation continue_error break_error)))
+))
+;    (get_binding 'return 
+;      (interpret_parse_tree
+;       (get_function_body (get_closure expr s)) (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure expr s)) s return) new_return_continuation continue_error break_error))
+;  )
+;)
 
 (define get_formal_params car)
 (define get_function_body cadr)
@@ -88,9 +95,9 @@
   (lambda (actual_params formal_params s return)
     (cond
       ((null? actual_params) (return s))
-      (else (Mvalue-cps (car actual_params) s
+      (else (Mvalue-cps (car actual_params) (remove_layer s)
                 (lambda (v) (bind_parameters-cps (cdr actual_params) (cdr formal_params)
-                                    (set_binding (car formal_params) v s)
+                                    (add_to_state (car formal_params) v s)
                                     (lambda (v2) (return v2)
                             ))
                 )
@@ -380,4 +387,126 @@
         )
 ))
 
-(interpret "tests3/4")
+(define layer_search
+    (lambda (var layer)
+        (cond
+            ((null? layer) 'error)
+            ((eq? var (car (car layer))) (cadr (car layer)))
+            (else (layer_search var (cdr layer)))
+)))
+
+; Searches for the first occurence of a variable in the state and returns its value
+(define state_search
+  (lambda (var state)
+    (cond
+      ((null? state) 'error)
+      ((eq? (layer_search var (top_layer state)) 'error) (state_search var (remove_layer state)))
+      (else (layer_search var (top_layer state)))
+    )
+  )
+)
+
+; Add a (key value) to the table which is ((key value) (key value) ... )
+; So i.e. ((a, 5) (b, 6)) -> ((c, 7) (a, 5) (b, 6)) with args c, 7.
+(define add_to_layer
+  (lambda (key value layer)
+    (cons (list key value) layer)
+  )
+)
+
+; Adds a variable's value to the top_layer of a state
+(define add_to_state
+  (lambda (key value state)
+    (cons (add_to_layer key value (top_layer state)) (remove_layer state))
+  )
+)
+
+; Take a table which is ((key1 value) (key2 value) ...)
+; and return ((key2 value) ...) if it was (delete key1 table)
+(define delete_from_layer
+    (lambda (key layer)
+        (cond
+            ((null? layer) '())
+            ((eq? key (car (car layer))) (cdr layer))
+            (else (cons (car layer) (delete_from_layer key (cdr layer))))
+)))
+
+; Sets a variable's value in a state
+(define set_binding
+  (lambda (key value s)
+    (cond
+      ((eq? 'error (get_binding key s)) (add_to_state key value s))
+      ((not (eq? 'error (get_binding_layer key (top_layer s)))) (add_to_state key value (cons (delete_from_layer key (top_layer s)) (remove_layer s))))
+      (else (cons (top_layer s) (set_binding key value (remove_layer s))))
+    )
+  )
+)
+
+; Gets a variables value inside a given state
+(define get_binding
+  (lambda (key s)
+    (state_search key s)
+  )
+)
+
+; Gets a variables value inside a given layer
+(define get_binding_layer
+  (lambda (key layer)
+    (layer_search key layer)
+  )
+)
+
+; Throw an error if the binding is not there.
+(define get_binding_safe
+    (lambda (key s)
+        (if (equal? (get_binding key s) 'error)
+            (error "Referencing variable before assignment")
+            (get_binding key s)
+)))
+
+; Checks if a given key has been initialized
+(define defined?
+  (lambda (key s)
+    (not (eq? (state_search key s) 'error))
+  )
+)
+
+; Returns the remainder of a layer, after a given key
+(define layer_remainder
+  (lambda (key layer)
+    (cond
+      ((null? layer) new_layer)
+      ((eq? (car (car layer)) key) layer)
+      (else (layer_remainder key (cdr layer)))
+    )
+  )
+)
+; Returns the remainder of a state, after a given key
+(define state_remainder
+  (lambda (key s)
+    (cond
+      ((null? s) new_state)
+      ((eq? (layer_search key (top_layer s)) 'error) (state_remainder key (remove_layer s)))
+      (else (cons (layer_remainder key (top_layer s)) (remove_layer s)))
+    )
+  )
+)
+
+; State stored as a list of layers. Each layer contains two tables: bindings and inittable
+; Each table is stored as a list of pairs (var val)
+(define new_layer '())
+(define new_state (list new_layer))
+
+; Some state/layer abstractions
+(define top_layer car)
+(define add_layer
+  (lambda (s)
+    (cons new_layer s)
+  )
+)
+(define remove_layer cdr)
+
+
+(interpret "tests3/12")
+
+
