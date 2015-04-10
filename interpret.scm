@@ -88,7 +88,14 @@
   (lambda (actual_params formal_params s return)
     (cond
       ((null? actual_params) (return s))
-      (else (bind_parameters (cdr actual_params) (cdr formal_params) (set_binding (car formal_params) (Mvalue-cps (car actual_params) s return) s) return))
+      (else (Mvalue-cps (car actual_params) s
+                (lambda (v) (bind_parameters (cdr actual_params) (cdr formal_params)
+                                    (set_binding (car formal_params) v s)
+                                    (lambda (v2) (return v2)
+                            ))
+                )
+      ))
+      ;(else (bind_parameters (cdr actual_params) (cdr formal_params) (set_binding (car formal_params) (Mvalue-cps (car actual_params) s return) s) return))
     )
   )
 )
