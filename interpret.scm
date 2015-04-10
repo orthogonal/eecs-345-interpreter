@@ -255,6 +255,16 @@
   )
 )
 
+(define Mstate_begin-cps
+  (lambda (expr s return break continue)
+    (set_binding 'return
+      (get_binding 'return (return
+        (interpret_parse_tree (begin_body expr) (add_layer s) return (break_layer break) (continue_layer continue))))
+      (remove_layer
+        (interpret_parse_tree (begin_body expr) (add_layer s) return (break_layer break) (continue_layer continue))))
+))
+      
+
 ; Abstractions for layers
 (define begin_body cdr)
 
