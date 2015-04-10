@@ -74,7 +74,7 @@
     
     (get_binding 'return 
       (interpret_parse_tree
-       (get_function_body (get_closure expr s)) (bind_parameters (get_actual_params expr) (get_formal_params (get_closure expr s)) s return) new_return_continuation continue_error break_error))
+       (get_function_body (get_closure expr s)) (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure expr s)) s return) new_return_continuation continue_error break_error))
   )
 )
 
@@ -84,18 +84,18 @@
 
 ; Evaluates the actual params and binds their values to the formal params
 ; Isn't actually cps
-(define bind_parameters
+(define bind_parameters-cps
   (lambda (actual_params formal_params s return)
     (cond
       ((null? actual_params) (return s))
       (else (Mvalue-cps (car actual_params) s
-                (lambda (v) (bind_parameters (cdr actual_params) (cdr formal_params)
+                (lambda (v) (bind_parameters-cps (cdr actual_params) (cdr formal_params)
                                     (set_binding (car formal_params) v s)
                                     (lambda (v2) (return v2)
                             ))
                 )
       ))
-      ;(else (bind_parameters (cdr actual_params) (cdr formal_params) (set_binding (car formal_params) (Mvalue-cps (car actual_params) s return) s) return))
+      ;(else (bind_parameters-cps (cdr actual_params) (cdr formal_params) (set_binding (car formal_params) (Mvalue-cps (car actual_params) s return) s) return))
     )
   )
 )
@@ -380,4 +380,4 @@
         )
 ))
 
-(interpret "tests3/5")
+(interpret "tests3/4")
