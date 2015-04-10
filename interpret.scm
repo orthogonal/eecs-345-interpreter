@@ -25,7 +25,7 @@
 ; Creates the "outer state" by making a first pass on the parse tree, then adds a new layer to it
 (define initial_environment 
   (lambda (parse_tree)
-    (add_layer (interpret_outer_parse_tree-cps parse_tree new_state new_return_continuation))
+    (interpret_outer_parse_tree-cps parse_tree new_state new_return_continuation)
   )
 )
 
@@ -507,6 +507,6 @@
 (define remove_layer cdr)
 
 
-(interpret "tests3/12")
+(interpret "tests3/5")
 
 
