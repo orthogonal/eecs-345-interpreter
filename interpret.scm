@@ -152,6 +152,7 @@
   (lambda (parse_tree state return break continue)
     (cond
       ((null? parse_tree) state)
+      ((not(equal? (get_binding 'return state) 'error)) state)
       (else (interpret_parse_tree (parse_tree_remainder parse_tree) (Mstate-cps (parse_tree_statement parse_tree) state return break continue) return break continue))
     )
   )
