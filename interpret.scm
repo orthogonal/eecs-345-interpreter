@@ -73,12 +73,22 @@
     ;TODO use boxes to allow for global variable side effects
     
     (return
-        (get_binding 'return
-            (interpret_parse_tree
+        (get_binding 'return (Mvalue_function_call_callcc expr s return)
+            ))
+))
+
+(define Mvalue_function_call_callcc
+  (lambda(expr s return)
+    (call/cc
+     (lambda(returnImmediate)
+       (interpret_parse_tree
                 (get_function_body (get_closure expr s))
                 (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure expr s)) (add_layer s) new_return_continuation)
-                new_return_continuation continue_error break_error)))
-))
+                return returnImmediate continue_error break_error)
+       )
+     )
+    )
+  )
 ;    (get_binding 'return 
 ;      (interpret_parse_tree
 ;       (get_function_body (get_closure expr s)) (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure expr s)) s return) new_return_continuation continue_error break_error))
@@ -123,13 +133,13 @@
 
 ; Calls a function but doesn't do anything with what it returns; instead calls return continuation on the updated state.
 (define Mstate_function_call-cps
-  (lambda (expr s return)
+  (lambda (expr s return fucntionReturn)
     (return
       (remove_layer
         (interpret_parse_tree
           (get_function_body (get_closure expr s))
           (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure expr s)) (add_layer s) new_return_continuation)
-          new_return_continuation continue_error break_error)))
+          new_return_continuation fucntionReturn continue_error break_error)))
 ))
 
 ; Some abstractions for parsing out the pieces of a function definition expression
@@ -160,11 +170,10 @@
 
 ; Takes a parse tree generated from Connamacher's parser, and interprets statements one at a time
 (define interpret_parse_tree
-  (lambda (parse_tree state return break continue)
+  (lambda (parse_tree state return fucntionReturn break continue)
     (cond
       ((null? parse_tree) state)
-      ((not(equal? (get_binding 'return state) 'error)) state)
-      (else (interpret_parse_tree (parse_tree_remainder parse_tree) (Mstate-cps (parse_tree_statement parse_tree) state return break continue) return break continue))
+      (else (interpret_parse_tree (parse_tree_remainder parse_tree) (Mstate-cps (parse_tree_statement parse_tree) state return fucntionReturn break continue) return fucntionReturn break continue))
     )
   )
 )
@@ -177,15 +186,15 @@
 ; Takes an expression, i.e. (= x 5), and calls the appropriate function
 ;   based on the keyword of the expression
 (define Mstate-cps
-  (lambda (expr s return break continue)
+  (lambda (expr s return fucntionReturn break continue)
     (cond
       ((equal? (keyword expr) 'var)                 (Mstate_var-cps expr s return))
       ((equal? (keyword expr) '=)                   (Mstate_eq-cps expr s return))
-      ((equal? (keyword expr) 'return)              (Mstate_return-cps expr s return))
-      ((equal? (keyword expr) 'if)                  (Mstate_if-cps expr s return break continue))
-      ((equal? (keyword expr) 'while)               (Mstate_while-cps expr s return))
-      ((equal? (keyword expr) 'begin)               (Mstate_begin-cps expr s return break continue))
-      ((equal? (keyword expr) 'funcall)             (Mstate_function_call-cps expr s return))
+      ((equal? (keyword expr) 'return)              (Mstate_return-cps expr s return fucntionReturn))
+      ((equal? (keyword expr) 'if)                  (Mstate_if-cps expr s return fucntionReturn break continue))
+      ((equal? (keyword expr) 'while)               (Mstate_while-cps expr s return fucntionReturn))
+      ((equal? (keyword expr) 'begin)               (Mstate_begin-cps expr s return fucntionReturn break continue))
+      ((equal? (keyword expr) 'funcall)             (Mstate_function_call-cps expr s return fucntionReturn))
       ((equal? (keyword expr) 'function)            (Mstate_function_def-cps expr s return))
       ((equal? (keyword expr) 'break)               (break s))
       ((equal? (keyword expr) 'continue)            (continue s))
@@ -231,8 +240,8 @@
 
 ; Adds the return value into the state under name 'return
 (define Mstate_return-cps
-  (lambda (expr s return)
-    (set_binding 'return (Mvalue-cps (returnexpr expr) s (lambda (v) v)) s)
+  (lambda (expr s return fucntionReturn)
+    (fucntionReturn(set_binding 'return (Mvalue-cps (returnexpr expr) s (lambda (v) v)) s))
   )
 )
 
@@ -244,11 +253,11 @@
 ; If it's false, return just the state unchanged if no else statement, and
 ;  Mstate(else-expr) if there is an else statement.
 (define Mstate_if-cps
-  (lambda (expr s return break continue)
+  (lambda (expr s return fucntionReturn break continue)
     (cond
-      ((Mboolean-cps (ifcond expr) s (lambda (v) v)) (Mstate-cps (iftruebody expr) s return break continue))
+      ((Mboolean-cps (ifcond expr) s (lambda (v) v)) (Mstate-cps (iftruebody expr) s return fucntionReturn break continue))
       ((null? (ifnoelse expr)) s)
-      (else (Mstate-cps (iffalsebody expr) s return break continue))
+      (else (Mstate-cps (iffalsebody expr) s return fucntionReturn break continue))
     )
   )
 )
@@ -262,18 +271,18 @@
 ; Takes a begin statement
 ; This is where layers of code are computed
 (define Mstate_begin-cps
-  (lambda (expr s return break continue)
-    (remove_layer (interpret_parse_tree (begin_body expr) (add_layer s) return (break_layer break) (continue_layer continue)))
+  (lambda (expr s return fucntionReturn break continue)
+    (remove_layer (interpret_parse_tree (begin_body expr) (add_layer s) return fucntionReturn (break_layer break) (continue_layer continue)))
   )
 )
 
 (define Mstate_begin-cps
-  (lambda (expr s return break continue)
+  (lambda (expr s return fucntionReturn break continue)
     (set_binding 'return
       (get_binding 'return (return
-        (interpret_parse_tree (begin_body expr) (add_layer s) return (break_layer break) (continue_layer continue))))
+        (interpret_parse_tree (begin_body expr) (add_layer s) return fucntionReturn (break_layer break) (continue_layer continue))))
       (remove_layer
-        (interpret_parse_tree (begin_body expr) (add_layer s) return (break_layer break) (continue_layer continue))))
+        (interpret_parse_tree (begin_body expr) (add_layer s) return fucntionReturn (break_layer break) (continue_layer continue))))
 ))
       
 
@@ -300,13 +309,13 @@
 ;Takes (< i j) (= i (+ i 1)) s and return
 ;This part takes care of break and continue statements
 (define Mstate_while-cps
-    (lambda (expr s return)
+    (lambda (expr s return fucntionReturn)
       (call/cc (lambda (break)
         (letrec (
             (loop (lambda (expr s)
                 (cond
                     ((Mboolean-cps (whilecond expr) s (lambda (v) v))
-                        (loop expr (Mstate-cps (whilebody expr) s return break (continue loop expr return break))))
+                        (loop expr (Mstate-cps (whilebody expr) s return fucntionReturn break (continue loop expr return break))))
                     (else (break s)))
             ))) (loop expr s)
       )
@@ -420,7 +429,7 @@
     (lambda (var layer)
         (cond
             ((null? layer) 'error)
-            ((eq? var (car (car layer))) (cadr (car layer)))
+            ((eq? var (car (car layer))) (unbox (cadr(car layer))))
             (else (layer_search var (cdr layer)))
 )))
 
@@ -439,7 +448,7 @@
 ; So i.e. ((a, 5) (b, 6)) -> ((c, 7) (a, 5) (b, 6)) with args c, 7.
 (define add_to_layer
   (lambda (key value layer)
-    (cons (list key value) layer)
+    (cons (list key (box value)) layer)
   )
 )
 
@@ -456,7 +465,7 @@
     (lambda (key layer)
         (cond
             ((null? layer) '())
-            ((eq? key (car (car layer))) (cdr layer))
+            ((eq? key (car (unbox(car layer)))) (cdr layer))
             (else (cons (car layer) (delete_from_layer key (cdr layer))))
 )))
 
@@ -465,7 +474,7 @@
   (lambda (key value s)
     (cond
       ((eq? 'error (get_binding key s)) (add_to_state key value s))
-      ((not (eq? 'error (get_binding_layer key (top_layer s)))) (add_to_state key value (cons (delete_from_layer key (top_layer s)) (remove_layer s))))
+      ((not (eq? 'error (get_binding_layer key (top_layer s)))) (car(cons s (set-box! (get_binding_box key (top_layer s)) value))))
       (else (cons (top_layer s) (set_binding key value (remove_layer s))))
     )
   )
@@ -482,6 +491,17 @@
 (define get_binding_layer
   (lambda (key layer)
     (layer_search key layer)
+  )
+)
+
+; Gets a variables value inside a given layer, returns the box
+(define get_binding_box
+  (lambda (key layer)
+        (cond
+            ((null? layer) 'error)
+            ((eq? key (car (car layer))) (cadr (car layer)))
+            (else (get_binding_box key (cdr layer)))
+            )
   )
 )
 
@@ -541,8 +561,3 @@
   )
 )
 (define remove_layer cdr)
-
-
-(interpret "tests3/10")
-
-
