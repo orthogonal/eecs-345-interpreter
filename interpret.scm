@@ -176,11 +176,11 @@
 ;   based on the keyword of the expression
 (define Mstate-cps
   (lambda (expr s return break continue)
-    ;(display "\n")
-    ;(display "\n")
-    ;(display expr)
-    ;(display "\n")
-    ;(display s)
+    (display "\n")
+    (display "\n")
+    (display expr)
+    (display "\n")
+    (display s)
     (cond
       ((equal? (keyword expr) 'var)                 (Mstate_var-cps expr s return))
       ((equal? (keyword expr) '=)                   (Mstate_eq-cps expr s return))
@@ -209,8 +209,7 @@
     (lambda (expr s return)
         (cond
             ((defined_in_layer? (varname expr) (top_layer s)) (error "Redefining variable"))
-            ;((null? (cddr expr)) (return (set_init (varname expr) 'false s)))
-            ((null? (cddr expr)) (return s))
+            ((null? (cddr expr)) (return (set_binding (varname expr) 'null s)))
             (else (Mvalue-cps (initialvalue expr) s (lambda (v) (return 
               (cons (car (set_binding (varname expr) v (top_layer_state s))) (remove_layer s))))))
         )
@@ -581,7 +580,7 @@
 (define remove_layer cdr)
 
 
-(interpret "tests3/15")
+(interpret "tests3/17")
 
 ;(set_binding 'x 5 new_state)
 ;(get_binding 'x (set_binding 'x 5 new_state))
