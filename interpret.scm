@@ -65,14 +65,10 @@
   )
 )
 
+; Evaluates a function call and returns its value
+; This is done by treating a function as a subprogram and returning the 'return binding in the resulting state
 (define Mvalue_function_call-cps
   (lambda (expr s return)
-    ;DONE get function environment
-    ;DONE evaluate each actual parameter and bind it to formal parameter (binding goes in function environment)
-    ;DONE interpret the body of the function with the function environment
-    ;TODO use boxes to allow for global variable side effects
-    ;car cddddr closure is the function environment (fourth argument to bind_parameters)
-
     (return
         (get_binding 'return
             (interpret_parse_tree
@@ -116,7 +112,9 @@
   )
 )
 
-; Calls a function but doesn't do anything with what it returns; instead calls return continuation on the updated state.
+; Calls a function with the proper function environment
+; Side effects are handled naturally by using boxed values
+; The initial state is returned, because the function will have updated any global vars via side effects
 (define Mstate_function_call-cps
   (lambda (expr s return)
     (begin
@@ -260,6 +258,8 @@
 
 ; Takes a begin statement
 ; This is where layers of code are computed
+; IMPORTANT: the letrec here is necessary due to begin statements (eg functions) having global side effects
+; If we reevaluated the state everywhere that new_state is used, a global var could be incremented over and over again
 (define Mstate_begin-cps
   (lambda (expr s return break continue)
     (letrec ((new_state (interpret_parse_tree (begin_body expr) (add_layer s) return (break_layer break) (continue_layer continue))))
@@ -408,6 +408,7 @@
         )
 ))
 
+; Searches for the first occurence of a variable in the layer and returns its value
 (define layer_search
     (lambda (var layer)
         (cond
@@ -573,16 +574,3 @@
   (lambda (s)
     (list (car s))))
 (define remove_layer cdr)
-
-
-;(interpret "tests3/17")
-
-;(set_binding 'x 5 new_state)
-;(get_binding 'x (set_binding 'x 5 new_state))
-;(set_binding 'x 4 (add_layer (set_binding 'x 5 new_state)))
-;(get_binding 'x (set_binding 'x 4 (add_layer (set_binding 'x 5 new_state))))
-;(update_binding 'x 3 (set_binding 'x 4 (add_layer (set_binding 'x 5 new_state))))
-;(remove_layer (update_binding 'x 3 (set_binding 'x 4 (add_layer (set_binding 'x 5 new_state)))))
-;(set_binding 'x 2 (remove_layer (update_binding 'x 3 (set_binding 'x 4 (add_layer (set_binding 'x 5 new_state))))))
-;(get_binding 'y (set_binding 'x 5 new_state))
-;(get_binding 'y (set_binding 'x 4 (add_layer (set_binding 'x 5 new_state))))
