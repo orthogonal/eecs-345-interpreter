@@ -1,6 +1,4 @@
 (load "functionParser.scm")
-;(load "simpleParser.scm")
-;(load "state_ops.scm")
 
 ; Kicks off the interpreter
 (define interpret
@@ -71,10 +69,10 @@
   (lambda (expr s return)
     (return
         (get_binding 'return
-            (interpret_parse_tree
+            (interpret_parse_tree_return
                 (get_function_body (get_closure expr s))
                 (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure expr s)) s
-                  (add_layer (get_function_environment expr s)) new_return_continuation)
+                                     (add_layer (get_function_environment expr s)) new_return_continuation)
                 new_return_continuation continue_error break_error)))
 ))
 
@@ -118,10 +116,10 @@
 (define Mstate_function_call-cps
   (lambda (expr s return)
     (begin
-      (interpret_parse_tree
+      (interpret_parse_tree_return
           (get_function_body (get_closure expr s))
-                (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure expr s)) s
-                  (add_layer (get_function_environment expr s)) new_return_continuation)
+          (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure expr s)) s
+                               (add_layer (get_function_environment expr s)) new_return_continuation)
           new_return_continuation continue_error break_error)
       
        (return s)
@@ -154,13 +152,23 @@
 (define break_error (lambda (v) (error 'no-loop)))
 (define continue_error (lambda (v) (error 'no-loop)))
 
+; Starts the function call with returnImmediate which immediately exits function
+(define interpret_parse_tree_return
+  (lambda (parse_tree state return break continue)
+    (call/cc
+     (lambda (returnImmediate)
+       (interpret_parse_tree parse_tree state return returnImmediate break continue)
+       )
+     )
+    )
+  )
+
 ; Takes a parse tree generated from Connamacher's parser, and interprets statements one at a time
 (define interpret_parse_tree
-  (lambda (parse_tree state return break continue)
+  (lambda (parse_tree state return function_return break continue)
     (cond
       ((null? parse_tree) state)
-      ((not(equal? (get_binding 'return state) 'error)) state)
-      (else (interpret_parse_tree (parse_tree_remainder parse_tree) (Mstate-cps (parse_tree_statement parse_tree) state return break continue) return break continue))
+      (else (interpret_parse_tree (parse_tree_remainder parse_tree) (Mstate-cps (parse_tree_statement parse_tree) state return function_return break continue) return function_return break continue))
     )
   )
 )
@@ -173,14 +181,14 @@
 ; Takes an expression, i.e. (= x 5), and calls the appropriate function
 ;   based on the keyword of the expression
 (define Mstate-cps
-  (lambda (expr s return break continue)
+  (lambda (expr s return function_return break continue)
     (cond
       ((equal? (keyword expr) 'var)                 (Mstate_var-cps expr s return))
       ((equal? (keyword expr) '=)                   (Mstate_eq-cps expr s return))
-      ((equal? (keyword expr) 'return)              (Mstate_return-cps expr s return))
-      ((equal? (keyword expr) 'if)                  (Mstate_if-cps expr s return break continue))
-      ((equal? (keyword expr) 'while)               (Mstate_while-cps expr s return))
-      ((equal? (keyword expr) 'begin)               (Mstate_begin-cps expr s return break continue))
+      ((equal? (keyword expr) 'return)              (Mstate_return-cps expr s function_return))
+      ((equal? (keyword expr) 'if)                  (Mstate_if-cps expr s return function_return break continue))
+      ((equal? (keyword expr) 'while)               (Mstate_while-cps expr s return function_return))
+      ((equal? (keyword expr) 'begin)               (Mstate_begin-cps expr s return function_return break continue))
       ((equal? (keyword expr) 'funcall)             (Mstate_function_call-cps expr s return))
       ((equal? (keyword expr) 'function)            (Mstate_function_def-cps expr s return))
       ((equal? (keyword expr) 'break)               (break s))
@@ -228,8 +236,8 @@
 
 ; Adds the return value into the state under name 'return
 (define Mstate_return-cps
-  (lambda (expr s return)
-    (set_binding 'return (Mvalue-cps (returnexpr expr) s (lambda (v) v)) s)
+  (lambda (expr s function_return)
+    (function_return (set_binding 'return (Mvalue-cps (returnexpr expr) s (lambda (v) v)) s))
   )
 )
 
@@ -241,11 +249,11 @@
 ; If it's false, return just the state unchanged if no else statement, and
 ;  Mstate(else-expr) if there is an else statement.
 (define Mstate_if-cps
-  (lambda (expr s return break continue)
+  (lambda (expr s return function_return break continue)
     (cond
-      ((Mboolean-cps (ifcond expr) s (lambda (v) v)) (Mstate-cps (iftruebody expr) s return break continue))
+      ((Mboolean-cps (ifcond expr) s (lambda (v) v)) (Mstate-cps (iftruebody expr) s return function_return break continue))
       ((null? (ifnoelse expr)) s)
-      (else (Mstate-cps (iffalsebody expr) s return break continue))
+      (else (Mstate-cps (iffalsebody expr) s return function_return break continue))
     )
   )
 )
@@ -261,8 +269,8 @@
 ; IMPORTANT: the letrec here is necessary due to begin statements (eg functions) having global side effects
 ; If we reevaluated the state everywhere that new_state is used, a global var could be incremented over and over again
 (define Mstate_begin-cps
-  (lambda (expr s return break continue)
-    (letrec ((new_state (interpret_parse_tree (begin_body expr) (add_layer s) return (break_layer break) (continue_layer continue))))
+  (lambda (expr s return function_return break continue)
+    (letrec ((new_state (interpret_parse_tree (begin_body expr) (add_layer s) return function_return (break_layer break) (continue_layer continue))))
     (cond 
       ((defined? 'return new_state) (set_binding 'return (get_binding 'return (return new_state)) (remove_layer new_state)))
       (else (return (remove_layer new_state)))
@@ -292,13 +300,13 @@
 ;Takes (< i j) (= i (+ i 1)) s and return
 ;This part takes care of break and continue statements
 (define Mstate_while-cps
-    (lambda (expr s return)
+    (lambda (expr s return function_return)
       (call/cc (lambda (break)
         (letrec (
             (loop (lambda (expr s)
                 (cond
                     ((Mboolean-cps (whilecond expr) s (lambda (v) v))
-                        (loop expr (Mstate-cps (whilebody expr) s return break (continue loop expr return break))))
+                        (loop expr (Mstate-cps (whilebody expr) s return function_return break (continue loop expr return break))))
                     (else (break s)))
             ))) (loop expr s)
       )
