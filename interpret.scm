@@ -1,10 +1,31 @@
-(load "functionParser.scm")
 
-; Kicks off the interpreter
-(define interpret
+; Kicks off the interpreter for classes
+(define interpretClass
+  (lambda (filename class_main)
+    (prettify_result
+      error 'unimplemented
+    )
+  )
+)
+
+; Kicks off the interpreter for functions
+(define interpretFunction
   (lambda (filename)
     (prettify_result
       (interpret_main filename)
+    )
+  )
+)
+
+; Kicks off the interpreter for code
+(define interpretCode
+  (lambda (filename)
+    (prettify_result
+      (get_binding 'return
+            (interpret_parse_tree_return
+                (parser filename)
+                new_state
+                new_return_continuation continue_error break_error))
     )
   )
 )
