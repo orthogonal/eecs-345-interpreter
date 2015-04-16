@@ -39,7 +39,7 @@
 ; Runs the main function in the given class
 (define interpret_main_in_class
   (lambda (parsed class_name)
-    (Mvalue_function_call-cps '(funcall main) (initial_environment parsed) new_return_continuation class_name)))
+    (Mvalue_function_call-cps '(funcall main) (initial_environment parsed class_name) new_return_continuation class_name)))
 
 ; Runs the main function
 (define interpret_main
@@ -50,20 +50,21 @@
 
 ; Creates the "outer state" by making a first pass on the parse tree, then adds a new layer to it
 (define initial_environment 
-  (lambda (parse_tree)
-    (interpret_outer_parse_tree-cps parse_tree new_state new_return_continuation)
+  (lambda (parse_tree class_name)
+    (interpret_outer_parse_tree-cps parse_tree new_state new_return_continuation class_name)
     )
   )
 
 ; First pass of parse tree to build "outer state"
 (define interpret_outer_parse_tree-cps
-  (lambda (parse_tree state return)
+  (lambda (parse_tree state return class_name)
     (cond
       ((null? parse_tree) (return state))
       (else (interpret_outer_parse_tree-cps 
              (parse_tree_remainder parse_tree) 
-             (Mstate_outer-cps (parse_tree_statement parse_tree) state new_return_continuation) 
-             return))
+             (Mstate_outer-cps (parse_tree_statement parse_tree) state new_return_continuation class_name) 
+             return
+             class_name))
       )
     )
   )
@@ -77,11 +78,11 @@
 
 ; Mstate function for building the outer state. Only variable definitions, variable assignment, and function definitions are allowed outside of a function
 (define Mstate_outer-cps
-  (lambda (expr s return)
+  (lambda (expr s return class_name)
     (cond
       ((equal? (keyword expr) 'var)       (Mstate_var-cps expr s return))
       ((equal? (keyword expr) '=)         (Mstate_eq-cps expr s return))
-      ((equal? (keyword expr) 'function)  (Mstate_function_def-cps expr s return))
+      ((equal? (keyword expr) 'function)  (Mstate_function_def-cps expr s return class_name))
       ((equal? (keyword expr) 'class)     (Mstate_class_def-cps expr s return))
       (else (return state))
       )
@@ -92,6 +93,11 @@
 ; This is done by treating a function as a subprogram and returning the 'return binding in the resulting state
 (define Mvalue_function_call-cps
   (lambda (expr s return class_name)
+    (display s)
+    (display "\n")
+    (display (get_function_environment expr class_name s))
+    (display "\n")
+    (display expr)
     (if (eq? (get_closure (functionname expr) class_name s) 'error)
       (error "calling undefined function")
       (return (get_binding 'return
@@ -99,7 +105,7 @@
             (get_function_body (get_closure (functionname expr) class_name s))
              (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure (functionname expr) class_name s)) s
                (add_layer (get_function_environment expr class_name s)) new_return_continuation)
-             new_return_continuation break_error continue_error throw_error)))
+             new_return_continuation break_error continue_error throw_error class_name)))
     )
   )
 )
@@ -133,8 +139,8 @@
 
 ; Adds an entry to the state of (function_name function_closure)
 (define Mstate_function_def-cps
-  (lambda (expr s return)
-    (return (set_binding (functionname expr) (make_closure expr s) s))
+  (lambda (expr s return class_name)
+    (return (set_binding (functionname expr) (make_closure expr s class_name) s))
     )
   )
 
@@ -168,8 +174,8 @@
 
 ; Function closure is (formal_parameters, function_body, function_that_creates_function_environment)
 (define make_closure
-  (lambda (expr s)
-    (list (arglist expr) (functionbody expr) (functionenvironment (functionname expr)))
+  (lambda (expr s class_name)
+    (list (arglist expr) (functionbody expr) (functionenvironment class_name))
     )
   )
 
@@ -190,10 +196,10 @@
 
 ; Starts the function call with returnImmediate which immediately exits function
 (define interpret_parse_tree_return
-  (lambda (parse_tree state return break continue throw)
+  (lambda (parse_tree state return break continue throw class_name)
     (call/cc
      (lambda (returnImmediate)
-       (interpret_parse_tree parse_tree state return returnImmediate break continue throw)
+       (interpret_parse_tree parse_tree state return returnImmediate break continue throw class_name)
        )
      )
     )
@@ -201,13 +207,13 @@
 
 ; Takes a parse tree generated from Connamacher's parser, and interprets statements one at a time
 (define interpret_parse_tree
-  (lambda (parse_tree state return function_return break continue throw)
+  (lambda (parse_tree state return function_return break continue throw class_name)
     (cond
       ((null? parse_tree) state)
       (else (interpret_parse_tree 
              (parse_tree_remainder parse_tree) 
              (Mstate-cps (parse_tree_statement parse_tree) 
-                         state return function_return break continue throw) 
+                         state return function_return break continue throw class_name) 
              return function_return break continue throw))
       )
     )
@@ -221,16 +227,16 @@
 ; Takes an expression, i.e. (= x 5), and calls the appropriate function
 ;   based on the keyword of the expression
 (define Mstate-cps
-  (lambda (expr s return function_return break continue throw)
+  (lambda (expr s return function_return break continue throw class_name)
     (cond
       ((equal? (keyword expr) 'var)                 (Mstate_var-cps expr s return))
       ((equal? (keyword expr) '=)                   (Mstate_eq-cps expr s return))
-      ((equal? (keyword expr) 'return)              (Mstate_return-cps expr s function_return throw))
+      ((equal? (keyword expr) 'return)              (Mstate_return-cps expr s function_return throw class_name))
       ((equal? (keyword expr) 'if)                  (Mstate_if-cps expr s return function_return break continue throw))
       ((equal? (keyword expr) 'while)               (Mstate_while-cps expr s return function_return throw))
       ((equal? (keyword expr) 'begin)               (Mstate_begin-cps expr s return function_return break continue throw))
       ((equal? (keyword expr) 'funcall)             (Mstate_function_call-cps expr s return throw))
-      ((equal? (keyword expr) 'function)            (Mstate_function_def-cps expr s return))
+      ((equal? (keyword expr) 'function)            (Mstate_function_def-cps expr s return class_name))
       ((equal? (keyword expr) 'try)                 (Mstate_try-cps expr s return))
       ((equal? (keyword expr) 'throw)               (Mstate_throw-cps expr throw))
       ((equal? (keyword expr) 'break)               (break s))
@@ -278,9 +284,10 @@
 
 ; Adds the return value into the state under name 'return
 (define Mstate_return-cps
-  (lambda (expr s function_return throw)
+  (lambda (expr s function_return throw class_name)
+    (display s)
     (cond
-      ((procedure? throw)(function_return (set_binding 'return (Mvalue-cps (returnexpr expr) s (lambda (v) v)) s)))
+      ((procedure? throw)(function_return (set_binding 'return (Mvalue-cps (returnexpr expr) s (lambda (v) v) class_name) s)))
       (else (return_finally expr (Mstate-cps (finally_block throw) s new_return_continuation function_return break_error continue_error throw_error) function_return))
       )
     )
@@ -479,12 +486,12 @@
 ;  boolean evaluation of the expression.
 ; If none of the above, throw an error, expression is invalid.
 (define Mvalue-cps
-  (lambda (expr s return)
+  (lambda (expr s return class_name)
     (cond
       ((number? expr) (return expr))
       ((equal? expr 'true) (return #t))
       ((equal? expr 'false) (return #f))
-      ((not (list? expr)) (return (get_binding_safe expr s)))
+      ((not (list? expr)) (return (get_field_binding expr class_name s)))
       ((equal? (operator expr) '+) (return (+ (left_op_val expr s) (right_op_val expr s))))
       ((equal? (operator expr) '-)
        (if (null? (cddr expr)) 
@@ -515,7 +522,7 @@
       ((boolean? expr) (return expr))
       ((equal? expr 'true) (return #t))
       ((equal? expr 'false) (return #f))
-      ((not (list? expr)) (return (get_binding_safe expr s)))
+      ((not (list? expr)) (return (get_field_binding expr s class_name)))
       ((equal? (car expr) '||) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (or v1 v2)))))))
       ((equal? (car expr) '&&) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (and v1 v2)))))))
       ((equal? (car expr) '!=) (return (not (equal? (left_op_val expr s) (right_op_val expr s)))))
@@ -672,7 +679,7 @@
 (define get_binding_safe
   (lambda (key s)
     (if (equal? (get_binding key s) 'error)
-        (error "Referencing variable before assignment")
+        (error "Referencing variable before assignment:" key)
         (get_binding key s)
         )))
 
@@ -753,44 +760,44 @@
 (define class_def
     (lambda (d s)
         (cond
-            ((null? (get_def_extends d)) (class_body_def (get_def_body d) new_class s))   ; ('null env ifn)
-            (else (class_body_def (get_def_body d) (cons (get_def_parent_name d) (cdr new_class)) s))  ; (B env ifn)
+            ((null? (get_def_extends d)) (class_body_def (get_def_body d) new_class s (get_def_name d)))   ; ('null env ifn)
+            (else (class_body_def (get_def_body d) (cons (get_def_parent_name d) (cdr new_class)) s (get_def_name d)))  ; (B env ifn)
         )
     )
 )
 
 (define class_body_def ; change the second and third things in the class tuple to be the field/method envs.
-    (lambda (body class s)
+    (lambda (body class s class_name)
         (cons (parent class)
-         (cons (get_field_environment body '(()))
-         (cons (get_method_environment body '(()) s)
+         (cons (get_field_environment body '(()) class_name)
+         (cons (get_method_environment body '(()) s class_name)
          (cdddr class))))))
 
 (define get_field_environment
-    (lambda (body env)  ; env is i.e. field-environment
+    (lambda (body env class_name)  ; env is i.e. field-environment
         (cond
             ((null? body) env)
             ((equal? 'static-var (car (car body)))
                 (cond
                     ((null? (cddr (car body))) (get_field_environment (cdr body) (add_to_state (cadr (car body)) 'null env)))
-                    (else (Mvalue-cps (caddr (car body)) env (lambda (v) (get_field_environment (cdr body) (add_to_state (cadr (car body)) v env)))))
+                    (else (Mvalue-cps (caddr (car body)) env (lambda (v) (get_field_environment (cdr body) (add_to_state (cadr (car body)) v env) class_name)) class_name))
                 )
             )
-            (else (get_field_environment (cdr body) env))
+            (else (get_field_environment (cdr body) env class_name))
         )))
 
 
 (define get_method_environment
-    (lambda (body env s)
+    (lambda (body env s class_name)
         (cond
             ((null? body) env)
             ((equal? 'static-function (car (car body)))
                 (cond
                     ((null? (cddr (car body))) (get_method_environment (cdr body) (add_to_state (cadr (car body)) 'null env) s))
-                    (else (get_method_environment (cdr body) (add_to_state (cadr (car body)) (make_closure (car body) s) s) s))
+                    (else (get_method_environment (cdr body) (add_to_state (cadr (car body)) (make_closure (car body) s class_name) s) s class_name))
                 )
             )
-            (else (get_method_environment (cdr body) env s))
+            (else (get_method_environment (cdr body) env s class_name))
         )))
 
 
@@ -807,8 +814,8 @@
 (define get_field_binding_in_class
     (lambda (key class s)
         (cond
-            ((equal? 'error (state_search key (field_environment class))) (get_field_binding key (parent class) s))
-            (else (state_search key (field_environment class)))
+            ((equal? 'error (get_binding key (field_environment class))) (get_field_binding key (parent class) s))
+            (else (get_binding key (field_environment class)))
         )
     )
 )
@@ -830,6 +837,7 @@
     )
 )
 
-(initial_environment (parser "tests4/2"))
+(initial_environment (parser "tests4/2") 'A)
+(state_remainder 'A (initial_environment (parser "tests4/2") 'A))
 (interpretClass "tests4/2" 'A)
 
