@@ -58,6 +58,11 @@
 ; First pass of parse tree to build "outer state"
 (define interpret_outer_parse_tree-cps
   (lambda (parse_tree state return)
+    (display "\n")
+    (display "\n")
+    (display parse_tree)
+    (display "\n")
+    (display state)
     (cond
       ((null? parse_tree) (return state))
       (else (interpret_outer_parse_tree-cps 
@@ -71,7 +76,7 @@
 ; Gets environment function from function closure and calls it with a state to return function environment
 (define get_function_environment
   (lambda (expr class_name s)
-    ((caddr (get_closure (functionname expr) class_name s)) s)
+    ((caddr (get_closure expr class_name s)) s)
     )
   )
 
@@ -92,6 +97,7 @@
 ; This is done by treating a function as a subprogram and returning the 'return binding in the resulting state
 (define Mvalue_function_call-cps
   (lambda (expr s return class_name)
+    (display (functionname expr))
     (if (eq? (get_closure (functionname expr) class_name s) 'error)
       (error "calling undefined function")
       (return (get_binding 'return
@@ -656,7 +662,7 @@
       (else (unbox (state_search key s)))
     )
   )
-)
+      )
 
 ; Gets a variables value inside a given layer
 (define get_binding_layer
@@ -786,11 +792,11 @@
             ((null? body) env)
             ((equal? 'static-function (car (car body)))
                 (cond
-                    ((null? (cddr (car body))) (get_method_environment (cdr body) (add_to_state (cadr (car body)) 'null env) s))
-                    (else (get_method_environment (cdr body) (add_to_state (cadr (car body)) (make_closure (car body) s) s) s))
+                    ((null? (cddr (car body))) (get_field_environment (cdr body) (add_to_state (cadr (car body)) 'null env)))
+                    (else (get_field_environment (cdr body) (add_to_state (cadr (car body)) (make_closure (car body) s) s)))
                 )
             )
-            (else (get_method_environment (cdr body) env s))
+            (else (get_field_environment (cdr body) env))
         )))
 
 
@@ -816,20 +822,20 @@
 (define get_closure
     (lambda (key class_name s)
         (cond
-            ((eq? 'null class_name) (get_binding key s))
-            ((eq? 'error (get_binding class_name s)) 'error)
+            ((equal? 'null class_name) (get_binding key s))
+            ((equal? 'error (get_binding class_name s)) 'error)
             (else (get_closure_in_class key (get_binding class_name s) s))
 )))
 
 (define get_closure_in_class
     (lambda (key class s)
         (cond
-            ((equal? 'error (get_binding key (method_environment class))) (get_closure key (parent class) s))
-            (else (get_binding key (method_environment class)))
+            ((equal? 'error (state_search key (method_environment class))) (get_closure key (parent class) s))
+            (else (state_search key (method_environment class)))
         )
     )
 )
 
-(initial_environment (parser "tests4/2"))
-(interpretClass "tests4/2" 'A)
+(initial_environment (parser "tests4/1"))
+(interpretClass "tests4/1" "A")
 
