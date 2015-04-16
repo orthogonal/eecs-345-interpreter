@@ -5,9 +5,9 @@
 
 ; Kicks off the interpreter for classes
 (define interpretClass
-  (lambda (filename class_main)
+  (lambda (filename class_name)
      (prettify_result
-      (interpret_main_in_class (parser filename)))))
+      (interpret_main_in_class (parser filename) class_name))))
 
 ; Kicks off the interpreter for functions
 (define interpretFunction
@@ -75,8 +75,8 @@
 
 ; Gets environment function from function closure and calls it with a state to return function environment
 (define get_function_environment
-  (lambda (expr s)
-    ((caddr (get_closure expr s)) s)
+  (lambda (expr class_name s)
+    ((caddr (get_closure expr class_name s)) s)
     )
   )
 
@@ -97,13 +97,14 @@
 ; This is done by treating a function as a subprogram and returning the 'return binding in the resulting state
 (define Mvalue_function_call-cps
   (lambda (expr s return class_name)
-    (if (eq? (get_closure (functionname expr) class_name) 'error)
+    (display (functionname expr))
+    (if (eq? (get_closure (functionname expr) class_name s) 'error)
       (error "calling undefined function")
       (return (get_binding 'return
           (interpret_parse_tree_return
-            (get_function_body (get_closure (functionname expr) s class_name))
-             (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure (functionname expr) s class_name)) s
-               (add_layer (get_function_environment expr s)) new_return_continuation)
+            (get_function_body (get_closure (functionname expr) class_name s))
+             (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure (functionname expr) class_name s)) s
+               (add_layer (get_function_environment expr class_name s)) new_return_continuation)
              new_return_continuation break_error continue_error throw_error)))
     )
   )
@@ -159,7 +160,7 @@
       (interpret_parse_tree_return
        (get_function_body (get_closure expr s))
        (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure expr s)) s
-                            (add_layer (get_function_environment expr s)) new_return_continuation)
+                            (add_layer (get_function_environment expr class_name s)) new_return_continuation)
        new_return_continuation break_error continue_error throw_error)
       
       (return s)
@@ -742,7 +743,7 @@
 (define remove_layer cdr)
 
 
-(define new_class '('null '() '() '()))
+(define new_class '('null '(()) '(()) '()))
 (define parent car)
 (define field_environment cadr)
 (define method_environment caddr)
@@ -766,19 +767,19 @@
 
 (define class_body_def ; change the second and third things in the class tuple to be the field/method envs.
     (lambda (body class s)
-         (cons (parent class)
-         (cons (get_field_environment body '())
-         (cons (get_method_environment body '() s)
+        (cons (parent class)
+         (cons (get_field_environment body '(()))
+         (cons (get_method_environment body '(()) s)
          (cdddr class))))))
 
 (define get_field_environment
-    (lambda (body env)
+    (lambda (body env)  ; env is i.e. field-environment
         (cond
             ((null? body) env)
             ((equal? 'static-var (car (car body)))
                 (cond
-                    ((null? (cddr (car body))) (get_field_environment (cdr body) (add_to_layer (cadr (car body)) 'null env)))
-                    (else (Mvalue-cps (caddr (car body)) (list env) (lambda (v) (get_field_environment (cdr body) (add_to_layer (cadr (car body)) v env)))))
+                    ((null? (cddr (car body))) (get_field_environment (cdr body) (add_to_state (cadr (car body)) 'null env)))
+                    (else (Mvalue-cps (caddr (car body)) env (lambda (v) (get_field_environment (cdr body) (add_to_state (cadr (car body)) v env)))))
                 )
             )
             (else (get_field_environment (cdr body) env))
@@ -791,7 +792,7 @@
             ((null? body) env)
             ((equal? 'static-function (car (car body)))
                 (cond
-                    ((null? (cddr (car body))) (get_field_environment (cdr body) (add_to_layer (cadr (car body)) 'null env)))
+                    ((null? (cddr (car body))) (get_field_environment (cdr body) (add_to_state (cadr (car body)) 'null env)))
                     (else (get_field_environment (cdr body) (add_to_state (cadr (car body)) (make_closure (car body) s) s)))
                 )
             )
@@ -836,4 +837,5 @@
 )
 
 (initial_environment (parser "tests4/1"))
+(interpretClass "tests4/1" "A")
 
