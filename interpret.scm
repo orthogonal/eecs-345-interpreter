@@ -146,7 +146,7 @@
 ; Adds an entry to the state of (classname class_def)
 (define Mstate_class_def-cps
   (lambda (expr s return)
-    (return (set_binding (classname expr) (class_def expr)))))
+    (return (set_binding (classname expr) (class_def expr s) s))))
 
 (define classname cadr)
 
@@ -766,10 +766,10 @@
 
 (define class_body_def ; change the second and third things in the class tuple to be the field/method envs.
     (lambda (body class s)
-        ((cons (parent class)
+         (cons (parent class)
          (cons (get_field_environment body '())
          (cons (get_method_environment body '() s)
-         (cdddr class)))))))
+         (cdddr class))))))
 
 (define get_field_environment
     (lambda (body env)
@@ -792,7 +792,7 @@
             ((equal? 'static-function (car (car body)))
                 (cond
                     ((null? (cddr (car body))) (get_field_environment (cdr body) (add_to_layer (cadr (car body)) 'null env)))
-                    (else (get_field_environment (cdr body) (add_to_layer (cadr (car body)) (make_closure (caddr (car body)) s))))
+                    (else (get_field_environment (cdr body) (add_to_state (cadr (car body)) (make_closure (car body) s) s)))
                 )
             )
             (else (get_field_environment (cdr body) env))
@@ -835,5 +835,5 @@
     )
 )
 
-;(initial_environment (parser "tests4/1" "A"))
+(initial_environment (parser "tests4/1"))
 
