@@ -806,10 +806,20 @@
 (define get_field_binding
     (lambda (key class_name s)
         (cond
-            ((equal? 'null class_name) (get_binding key s))
-            ((equal? 'error (get_binding class_name s)) 'error)
-            (else (get_field_binding_in_class key (get_binding class_name s) s))
-)))
+            ((and (list? key) (eq? 'dot (car key))) (cond   ; (dot A x) or (dot super x)
+                ((eq? 'super (cadr key)) (get_field_binding (caddr key) (parent (get_binding class_name s)) s))
+                (else (get_field_binding (caddr key) (cadr key) s))
+            ))
+            (else 
+                (cond
+                    ((equal? 'null class_name) (get_binding key s))
+                    ((equal? 'error (get_binding class_name s)) 'error)
+                    (else (get_field_binding_in_class key (get_binding class_name s) s))
+                )
+            )
+        )
+    )
+)
 
 (define get_field_binding_in_class
     (lambda (key class s)
@@ -823,10 +833,19 @@
 (define get_closure
     (lambda (key class_name s)
         (cond
-            ((eq? 'null class_name) (get_binding key s))
-            ((eq? 'error (get_binding class_name s)) 'error)
-            (else (get_closure_in_class key (get_binding class_name s) s))
-)))
+            ((and (list? key) (eq? 'dot (car key))) (cond   ; (dot A x) or (dot super x)
+                ((eq? 'super (cadr key)) (get_closure (caddr key) (parent (get_binding class_name s)) s))
+                (else (get_closure (caddr key) (cadr key) s))
+            ))
+            (else 
+                (cond
+                    ((eq? 'null class_name) (get_binding key s))
+                    ((eq? 'error (get_binding class_name s)) 'error)
+                    (else (get_closure_in_class key (get_binding class_name s) s))
+                )
+            )
+        )
+))
 
 (define get_closure_in_class
     (lambda (key class s)
