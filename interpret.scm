@@ -559,6 +559,16 @@
       )
     ))
 
+
+
+
+;  =============
+;  state_ops.scm
+;  =============
+
+
+
+
 ; Searches for the first occurence of a variable in the layer and returns its value
 (define layer_search
   (lambda (var layer)
@@ -725,3 +735,100 @@
   (lambda (s)
     (list (car s))))
 (define remove_layer cdr)
+
+
+(define new_class '('null '() '() '()))
+(define parent car)
+(define field_environment cadr)
+(define method_environment caddr)
+(define instance_field_names cadddr)
+
+(define get_def_name cadr)
+(define get_def_extends caddr)
+(define get_def_body cadddr)
+(define get_def_parent_name
+    (lambda (d)
+        (cadr (get_def_extends d))))
+
+(define class_def
+    (lambda (d)
+        (cond
+            ((null? (get_def_extends d)) (class_body_def (get_def_body d) new_class))   ; ('null env ifn)
+            (else (class_body_def (get_def_body d) (cons (get_def_parent_name d) (cdr new_class))))  ; (B env ifn)
+        )
+    )
+)
+
+(define class_body_def ; change the second and third things in the class tuple to be the field/method envs.
+    (lambda (body class)
+        ((cons (parent class)
+         (cons (get_field_environment body '())
+         (cons (get_method_environment body '())
+         (cdddr class)))))))
+
+(define get_field_environment
+    (lambda (body env)
+        (cond
+            ((null? body) env)
+            ((equal? 'static-var (car (car body)))
+                (cond
+                    ((null? (cddr (car body))) (get_field_environment (cdr body) (add_to_layer (cadr (car body)) 'null env)))
+                    (else (Mvalue-cps (caddr (car body)) (list env) (lambda (v) (get_field_environment (cdr body) (add_to_layer (cadr (car body)) v env)))))
+                )
+            )
+            (else (get_field_environment (cdr body) env))
+        )))
+
+
+(define get_method_environment
+    (lambda (body env)
+        (cond
+            ((null? body) env)
+            ((equal? 'static-function (car (car body)))
+                (cond
+                    ((null? (cddr (car body))) (get_field_environment (cdr body) (add_to_layer (cadr (car body)) 'null env)))
+                    (else (get_field_environment (cdr body) (add_to_layer (cadr (car body)) (get_closure (caddr (car body)) (list env)))))
+                )
+            )
+            (else (get_field_environment (cdr body) env))
+        )))
+
+
+; Gets i.e. A.x, you would call with (key=x, class_name=A, state=s)
+; If the class name exists, search its field_environment list for the (tbc)
+(define get_field_binding
+    (lambda (key class_name s)
+        (cond
+            ((equal? 'null class_name) (get_binding key s))
+            ((equal? 'error (get_binding class_name s)) 'error)
+            (else (get_field_binding_in_class key (get_binding class_name s) s))
+)))
+
+(define get_field_binding_in_class
+    (lambda (key class s)
+        (cond
+            ((equal? 'error (state_search key (field_environment class))) (get_field_binding key (parent class) s))
+            (else (state_search key (field_environment class)))
+        )
+    )
+)
+
+(define get_closure
+    (lambda (key class_name s)
+        (cond
+            ((equal? 'null class_name) (get_binding key s))
+            ((equal? 'error (get_binding class_name s)) 'error)
+            (else (get_closure_in_class key (get_binding class_name s) s))
+)))
+
+(define get_closure_in_class
+    (lambda (key class s)
+        (cond
+            ((equal? 'error (state_search key (method_environment class))) (get_closure key (parent class) s))
+            (else (state_search key (method_environment class)))
+        )
+    )
+)
+
+
+
