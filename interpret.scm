@@ -58,11 +58,6 @@
 ; First pass of parse tree to build "outer state"
 (define interpret_outer_parse_tree-cps
   (lambda (parse_tree state return)
-    (display "\n")
-    (display "\n")
-    (display parse_tree)
-    (display "\n")
-    (display state)
     (cond
       ((null? parse_tree) (return state))
       (else (interpret_outer_parse_tree-cps 
@@ -76,7 +71,7 @@
 ; Gets environment function from function closure and calls it with a state to return function environment
 (define get_function_environment
   (lambda (expr class_name s)
-    ((caddr (get_closure expr class_name s)) s)
+    ((caddr (get_closure (functionname expr) class_name s)) s)
     )
   )
 
@@ -97,17 +92,14 @@
 ; This is done by treating a function as a subprogram and returning the 'return binding in the resulting state
 (define Mvalue_function_call-cps
   (lambda (expr s return class_name)
-    (display (functionname expr))
     (if (eq? (get_closure (functionname expr) class_name s) 'error)
       (error "calling undefined function")
-      (begin
-      (display "\n")
       (return (get_binding 'return
           (interpret_parse_tree_return
             (get_function_body (get_closure (functionname expr) class_name s))
              (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure (functionname expr) class_name s)) s
                (add_layer (get_function_environment expr class_name s)) new_return_continuation)
-             new_return_continuation break_error continue_error throw_error))))
+             new_return_continuation break_error continue_error throw_error)))
     )
   )
 )
