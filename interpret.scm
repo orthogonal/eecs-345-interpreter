@@ -100,12 +100,14 @@
     (display (functionname expr))
     (if (eq? (get_closure (functionname expr) class_name s) 'error)
       (error "calling undefined function")
+      (begin
+      (display "\n")
       (return (get_binding 'return
           (interpret_parse_tree_return
             (get_function_body (get_closure (functionname expr) class_name s))
              (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure (functionname expr) class_name s)) s
                (add_layer (get_function_environment expr class_name s)) new_return_continuation)
-             new_return_continuation break_error continue_error throw_error)))
+             new_return_continuation break_error continue_error throw_error))))
     )
   )
 )
@@ -662,7 +664,7 @@
       (else (unbox (state_search key s)))
     )
   )
-      )
+)
 
 ; Gets a variables value inside a given layer
 (define get_binding_layer
@@ -822,20 +824,20 @@
 (define get_closure
     (lambda (key class_name s)
         (cond
-            ((equal? 'null class_name) (get_binding key s))
-            ((equal? 'error (get_binding class_name s)) 'error)
+            ((eq? 'null class_name) (get_binding key s))
+            ((eq? 'error (get_binding class_name s)) 'error)
             (else (get_closure_in_class key (get_binding class_name s) s))
 )))
 
 (define get_closure_in_class
     (lambda (key class s)
         (cond
-            ((equal? 'error (state_search key (method_environment class))) (get_closure key (parent class) s))
-            (else (state_search key (method_environment class)))
+            ((equal? 'error (get_binding key (method_environment class))) (get_closure key (parent class) s))
+            (else (get_binding key (method_environment class)))
         )
     )
 )
 
 (initial_environment (parser "tests4/1"))
-(interpretClass "tests4/1" "A")
+(interpretClass "tests4/1" 'A)
 
