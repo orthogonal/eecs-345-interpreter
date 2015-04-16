@@ -1,25 +1,19 @@
 ;For current testing
 ;(load "functionParser.scm")
-;(load "classParser.scm")
+(load "classParser.scm")
 ;(load "basicParser.scm")
 
 ; Kicks off the interpreter for classes
 (define interpretClass
   (lambda (filename class_main)
-    (prettify_result
-     error 'unimplemented
-     )
-    )
-  )
+     (prettify_result
+      (interpret_main_in_class (parser filename)))))
 
 ; Kicks off the interpreter for functions
 (define interpretFunction
   (lambda (filename)
     (prettify_result
-     (interpret_main (parser filename))
-     )
-    )
-  )
+     (interpret_main (parser filename)))))
 
 ; Kicks off the interpreter for code
 (define interpretCode
@@ -29,10 +23,7 @@
                   (interpret_parse_tree_return
                    (parser filename)
                    new_state
-                   new_return_continuation continue_error break_error throw_error))
-     )
-    )
-  )
+                   new_return_continuation continue_error break_error throw_error)))))
 
 ; Converts #t to true and #f to false before returning
 (define prettify_result
@@ -44,6 +35,11 @@
       )
     )
   )
+
+; Runs the main function in the given class
+(define interpret_main_in_class
+  (lambda (parsed class_name)
+    (Mvalue_function_call-cps '(funcall main) (initial_environment parsed) new_return_continuation class_name)))
 
 ; Runs the main function
 (define interpret_main
@@ -86,6 +82,7 @@
       ((equal? (keyword expr) 'var)       (Mstate_var-cps expr s return))
       ((equal? (keyword expr) '=)         (Mstate_eq-cps expr s return))
       ((equal? (keyword expr) 'function)  (Mstate_function_def-cps expr s return))
+      ((equal? (keyword expr) 'class)     (Mstate_class_def-cps expr s return))
       (else (return state))
       )
     )
@@ -94,15 +91,18 @@
 ; Evaluates a function call and returns its value
 ; This is done by treating a function as a subprogram and returning the 'return binding in the resulting state
 (define Mvalue_function_call-cps
-  (lambda (expr s return)
-    (return
-     (get_binding 'return
-                  (interpret_parse_tree_return
-                   (get_function_body (get_closure expr s))
-                   (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure expr s)) s
-                                        (add_layer (get_function_environment expr s)) new_return_continuation)
-                   new_return_continuation break_error continue_error throw_error)))
-    ))
+  (lambda (expr s return class_name)
+    (if (eq? (get_closure (functionname expr) class_name) 'error)
+      (error "calling undefined function")
+      (return (get_binding 'return
+          (interpret_parse_tree_return
+            (get_function_body (get_closure (functionname expr) s class_name))
+             (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure (functionname expr) s class_name)) s
+               (add_layer (get_function_environment expr s)) new_return_continuation)
+             new_return_continuation break_error continue_error throw_error)))
+    )
+  )
+)
 
 (define get_formal_params car)
 (define get_function_body cadr)
@@ -125,11 +125,11 @@
   )
 
 ; Looks up and returns function closure from state
-(define get_closure
-  (lambda (expr s)
-    (get_binding (functionname expr) s)
-    )
-  )
+;(define get_closure
+;  (lambda (expr s)
+;    (get_binding (functionname expr) s)
+;    )
+;  )
 
 ; Adds an entry to the state of (function_name function_closure)
 (define Mstate_function_def-cps
@@ -137,6 +137,13 @@
     (return (set_binding (functionname expr) (make_closure expr s) s))
     )
   )
+
+; Adds an entry to the state of (classname class_def)
+(define Mstate_class_def-cps
+  (lambda (expr s return)
+    (return (set_binding (class_name expr) (class_def expr s)))))
+
+(define classname cadr)
 
 ; Calls a function with the proper function environment
 ; Side effects are handled naturally by using boxed values
