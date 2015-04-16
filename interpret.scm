@@ -58,6 +58,11 @@
 ; First pass of parse tree to build "outer state"
 (define interpret_outer_parse_tree-cps
   (lambda (parse_tree state return)
+    (display "\n")
+    (display "\n")
+    (display parse_tree)
+    (display "\n")
+    (display state)
     (cond
       ((null? parse_tree) (return state))
       (else (interpret_outer_parse_tree-cps 
@@ -141,7 +146,7 @@
 ; Adds an entry to the state of (classname class_def)
 (define Mstate_class_def-cps
   (lambda (expr s return)
-    (return (set_binding (class_name expr) (class_def expr s)))))
+    (return (set_binding (classname expr) (class_def expr)))))
 
 (define classname cadr)
 
@@ -751,19 +756,19 @@
         (cadr (get_def_extends d))))
 
 (define class_def
-    (lambda (d)
+    (lambda (d s)
         (cond
-            ((null? (get_def_extends d)) (class_body_def (get_def_body d) new_class))   ; ('null env ifn)
-            (else (class_body_def (get_def_body d) (cons (get_def_parent_name d) (cdr new_class))))  ; (B env ifn)
+            ((null? (get_def_extends d)) (class_body_def (get_def_body d) new_class s))   ; ('null env ifn)
+            (else (class_body_def (get_def_body d) (cons (get_def_parent_name d) (cdr new_class)) s))  ; (B env ifn)
         )
     )
 )
 
 (define class_body_def ; change the second and third things in the class tuple to be the field/method envs.
-    (lambda (body class)
+    (lambda (body class s)
         ((cons (parent class)
          (cons (get_field_environment body '())
-         (cons (get_method_environment body '())
+         (cons (get_method_environment body '() s)
          (cdddr class)))))))
 
 (define get_field_environment
@@ -781,13 +786,13 @@
 
 
 (define get_method_environment
-    (lambda (body env)
+    (lambda (body env s)
         (cond
             ((null? body) env)
             ((equal? 'static-function (car (car body)))
                 (cond
                     ((null? (cddr (car body))) (get_field_environment (cdr body) (add_to_layer (cadr (car body)) 'null env)))
-                    (else (get_field_environment (cdr body) (add_to_layer (cadr (car body)) (get_closure (caddr (car body)) (list env)))))
+                    (else (get_field_environment (cdr body) (add_to_layer (cadr (car body)) (make_closure (caddr (car body)) s))))
                 )
             )
             (else (get_field_environment (cdr body) env))
@@ -830,5 +835,5 @@
     )
 )
 
-
+;(initial_environment (parser "tests4/1" "A"))
 
