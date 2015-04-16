@@ -742,7 +742,7 @@
 (define remove_layer cdr)
 
 
-(define new_class '('null '() '() '()))
+(define new_class '('null '(()) '(()) '()))
 (define parent car)
 (define field_environment cadr)
 (define method_environment caddr)
@@ -767,18 +767,18 @@
 (define class_body_def ; change the second and third things in the class tuple to be the field/method envs.
     (lambda (body class s)
         ((cons (parent class)
-         (cons (get_field_environment body '())
-         (cons (get_method_environment body '() s)
+         (cons (get_field_environment body '(()))
+         (cons (get_method_environment body '(()) s)
          (cdddr class)))))))
 
 (define get_field_environment
-    (lambda (body env)
+    (lambda (body env)  ; env is i.e. field-environment
         (cond
             ((null? body) env)
             ((equal? 'static-var (car (car body)))
                 (cond
-                    ((null? (cddr (car body))) (get_field_environment (cdr body) (add_to_layer (cadr (car body)) 'null env)))
-                    (else (Mvalue-cps (caddr (car body)) (list env) (lambda (v) (get_field_environment (cdr body) (add_to_layer (cadr (car body)) v env)))))
+                    ((null? (cddr (car body))) (get_field_environment (cdr body) (add_to_state (cadr (car body)) 'null env)))
+                    (else (Mvalue-cps (caddr (car body)) env (lambda (v) (get_field_environment (cdr body) (add_to_state (cadr (car body)) v env)))))
                 )
             )
             (else (get_field_environment (cdr body) env))
@@ -791,8 +791,8 @@
             ((null? body) env)
             ((equal? 'static-function (car (car body)))
                 (cond
-                    ((null? (cddr (car body))) (get_field_environment (cdr body) (add_to_layer (cadr (car body)) 'null env)))
-                    (else (get_field_environment (cdr body) (add_to_layer (cadr (car body)) (make_closure (caddr (car body)) s))))
+                    ((null? (cddr (car body))) (get_field_environment (cdr body) (add_to_state (cadr (car body)) 'null env)))
+                    (else (get_field_environment (cdr body) (add_to_state (cadr (car body)) (make_closure (caddr (car body)) s))))
                 )
             )
             (else (get_field_environment (cdr body) env))
