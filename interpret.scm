@@ -787,8 +787,41 @@
         )))
 
 
+; Gets i.e. A.x, you would call with (key=x, class_name=A, state=s)
+; If the class name exists, search its field_environment list for the (tbc)
+(define get_field_binding
+    (lambda (key class_name s)
+        (cond
+            ((equal? 'null class_name) (get_binding key s))
+            ((equal? 'error (get_binding class_name s)) 'error)
+            (else (get_field_binding_in_class key (get_binding class_name s) s))
+)))
 
+(define get_field_binding_in_class
+    (lambda (key class s)
+        (cond
+            ((equal? 'error (state_search key (field_environment class))) (get_field_binding key (parent class) s))
+            (else (state_search key (field_environment class)))
+        )
+    )
+)
 
+(define get_closure
+    (lambda (key class_name s)
+        (cond
+            ((equal? 'null class_name) (get_binding key s))
+            ((equal? 'error (get_binding class_name s)) 'error)
+            (else (get_closure_in_class key (get_binding class_name s) s))
+)))
+
+(define get_closure_in_class
+    (lambda (key class s)
+        (cond
+            ((equal? 'error (state_search key (method_environment class))) (get_closure key (parent class) s))
+            (else (state_search key (method_environment class)))
+        )
+    )
+)
 
 
 
