@@ -146,14 +146,14 @@
 ; Adds an entry to the state of (function_name function_closure)
 (define Mstate_function_def-cps
   (lambda (expr s return class_name)
-    (return (set_binding (functionname expr) (make_closure expr s class_name) s))
+    (return (set_closure_binding (functionname expr) (make_closure expr s class_name) class_name s))
     )
   )
 
 ; Adds an entry to the state of (classname class_def)
 (define Mstate_class_def-cps
   (lambda (expr s return)
-    (return (set_binding (classname expr) (class_def expr s) s))))
+    (return (set_binding (classname expr) (class_def expr s) s))))  ; No need to even pretend to be calling set_*_binding here, no inner classes.
 
 (define classname cadr)
 
@@ -827,6 +827,38 @@
     )
 )
 
+; Something to be called by set_binding if it gets a dot thing, i.e. A.x = 5 would be set_field_binding(x, 5, A, s)
+; We would additionally want to make it so that if we were in class A and x=5, the same thing happened... TODO
+; If the class_name comes up 'null, then change in the outer environment of s.  i.e. if x=5 and x is global, not a field of A.
+; I don't do this, but you could call this for everything.  If you aren't looking to set a value within the context of a class, make class_name 'null,
+; and it will fall-through to the regular set_binding operation.
+(define set_field_binding
+  (lambda (key val class_name s)
+    (cond
+      ((and (list? key) (eq? 'dot (car key))) (cond
+        ((eq? 'super (cadr key)) (set_field_binding (caddr key) val (parent (get_binding class_name s)) s)) ; (dot parent x) call with parent class
+        (else (set_field_binding (caddr key) val (cadr key) s))
+      ))
+      (else
+        (cond
+          ((equal? 'null class_name) (set_binding key val s))
+          ((equal? 'error (get_binding class_name s)) 'error)
+          (else (set_field_binding_in_class key val (get_binding class_name s) s))
+        )
+      )
+    )
+  )
+)
+
+(define set_field_binding_in_class
+  (lambda (key val class s)
+    (cond
+      ((equal? 'error (get_binding key (field_environment class))) (set_field_binding key val (parent class) s)) ; call recursively on parent.
+      (else (set_binding key val (field_environment class)))  ; This should update the class definition, i.e. for a static variable.  A.x=5
+    )
+  )
+)
+
 (define get_closure
     (lambda (key class_name s)
         (cond
@@ -851,6 +883,34 @@
             (else (get_binding key (method_environment class)))
         )
     )
+)
+
+; Same code as for fields, but will update the closure environment of a class.  Drops through to set_binding if class_name is 'null as usual.
+(define set_closure_binding
+  (lambda (key val class_name s)
+    (cond
+      ((and (list? key) (eq? 'dot (car key))) (cond
+        ((eq? 'super (cadr key)) (set_closure_binding (caddr key) val (parent (get_binding class_name s)) s))
+        (else (set_closure_binding (caddr key) val (cadr key) s))
+      ))
+      (else
+        (cond
+          ((equal? 'null class_name) (set_binding key val s))
+          ((equal? 'error (get_binding class_name s)) 'error)
+          (else (set_closure_binding_in_class key val (get_binding class_name s) s))
+        )
+      )
+    )
+  )
+)
+
+(define set_closure_binding_in_class
+  (lambda (key val class s)
+    (cond
+      ((equal? 'error (get_binding key (method_environment class))) (set_closure_binding key val (parent class) s)) ; call recursively on parent.
+      (else (set_binding key val (method_environment class)))  ; This should update the class definition, i.e. for a static variable.  A.x=5
+    )
+  )
 )
 
 (initial_environment (parser "tests4/2") 'A)
