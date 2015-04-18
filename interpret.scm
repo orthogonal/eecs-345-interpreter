@@ -13,7 +13,10 @@
 (define interpretFunction
   (lambda (filename)
     (prettify_result
-     (interpret_main (parser filename)))))
+     (interpret_main (parser filename))
+     )
+    )
+  )
 
 ; Kicks off the interpreter for code
 (define interpretCode
@@ -23,7 +26,10 @@
                   (interpret_parse_tree_return
                    (parser filename)
                    new_state
-                   new_return_continuation continue_error break_error throw_error)))))
+                   new_return_continuation continue_error break_error throw_error))
+     )
+    )
+  )
 
 ; Converts #t to true and #f to false before returning
 (define prettify_result
@@ -231,14 +237,14 @@
     (cond
       ((equal? (keyword expr) 'var)                 (Mstate_var-cps expr s return))
       ((equal? (keyword expr) '=)                   (Mstate_eq-cps expr s return))
-      ((equal? (keyword expr) 'return)              (Mstate_return-cps expr s function_return throw class_name))
+      ((equal? (keyword expr) 'return)              (Mstate_return-cps expr s function_return class_name))
       ((equal? (keyword expr) 'if)                  (Mstate_if-cps expr s return function_return break continue throw))
       ((equal? (keyword expr) 'while)               (Mstate_while-cps expr s return function_return throw))
       ((equal? (keyword expr) 'begin)               (Mstate_begin-cps expr s return function_return break continue throw))
       ((equal? (keyword expr) 'funcall)             (Mstate_function_call-cps expr s return throw))
+      ((equal? (keyword expr) 'try)                 (Mstate_try-cps expr s return function_return break continue throw))
+      ((equal? (keyword expr) 'throw)               (throw s))
       ((equal? (keyword expr) 'function)            (Mstate_function_def-cps expr s return class_name))
-      ((equal? (keyword expr) 'try)                 (Mstate_try-cps expr s return))
-      ((equal? (keyword expr) 'throw)               (Mstate_throw-cps expr throw))
       ((equal? (keyword expr) 'break)               (break s))
       ((equal? (keyword expr) 'continue)            (continue s))
       )
@@ -284,22 +290,14 @@
 
 ; Adds the return value into the state under name 'return
 (define Mstate_return-cps
-  (lambda (expr s function_return throw class_name)
-    (display s)
-    (cond
-      ((procedure? throw)(function_return (set_binding 'return (Mvalue-cps (returnexpr expr) s (lambda (v) v) class_name) s)))
-      (else (return_finally expr (Mstate-cps (finally_block throw) s new_return_continuation function_return break_error continue_error throw_error) function_return))
-      )
+
+  (lambda (expr s function_return class_name)
+    (function_return (set_binding 'return (Mvalue-cps (returnexpr expr) s (lambda (v) v) class_name) s))
     )
   )
 
-; Abstractions for Mstate return
+;abstractions for return
 (define returnexpr cadr)
-(define return_finally
-  (lambda (expr s function_return)
-    (function_return (set_binding 'return (Mvalue-cps (returnexpr expr) s (lambda (v) v)) s))
-    )
-  )
 
 ; Takes (if (cond) (then-expr) (else-expr))
 ; First evaluates the boolean condition.  If it's true, return Mstate(then-expr)
@@ -354,95 +352,94 @@
   )
 
 ;Evaluates the body of a try block and executes a try statement if an error is thrown
+;The throw is the expr comming in which will be used for catch
 (define Mstate_try-cps
-  (lambda (expr s return function_return)
-    (if (hascatchorfinally expr)
-        (call/cc (lambda (throw)
-                   (Mstate-cps (trybody expr) s return function_return break (continue loop expr return break) expr)
-                   )
-                 ))
-    (else error "No catch for a try")
-  )
+  (lambda (expr s return function_return break continue throw)
+    (if(hasfinally expr)
+       (executefinally (finally_block expr) 
+                       (try_catch expr s return 
+                                  (lambda (v) 
+                                    (function_return (executefinally (finally_block expr) v return function_return break continue throw)) ;;??? maybe not funct_return twice
+                                    break continue throw)
+                                  break continue throw)
+                       return function_return break continue throw)
+       (try_catch expr s return function_return break continue throw)
+       )
+
+    )
 )
+
+(define try_catch
+  (lambda (expr s return function_return break continue lastThrow)
+    (call/cc (lambda (throw)
+               (if(hascatch expr)
+                  (interpret_parse_tree 
+                   (trybody expr) s return 
+                   function_return
+                   break continue (lambda (v) (executecatch (catch_block expr) v return function_return break continue lastThrow)))
+                  (interpret_parse_tree 
+                   (trybody expr) s return 
+                   function_return
+                   break continue throw)
+                  )
+               )
+
+             )
+    )
+  )
 
 ;abstractions for try
 (define trybody cadr)
-(define catchbody caddr)
-(define finallybody cadddr)
-  
-(define hascatchorfinally
-  (lambda (expr)
-    (cond
-      ((or (null? (catchbody expr)) (finallybody expr)) #t)
-      (else #f)
-      )
-    )
-  )
-  
-(define hascatchandfinally
-  (lambda (expr)
-    (cond
-      ((and (not(null? (catchbody expr))) (not(null?(finallybody expr)))) #t)
-      (else #f)
-      )
-    )
-  )
+(define catch cddr)
+(define bodyofcatch caddar)
+(define finally cdddr)
+(define bodyoffinally cadar)
+(define exeptionofcatch cadr)
   
 (define hascatch
-  (lambda (throw)
-    (not (null? (catchbody throw)))
+  (lambda (expr)
+    (if (not(null? (car (catch expr))))
+    (equal? (caar (catch expr)) 'catch)
+    #f)
     )
   )
   
 (define hasfinally
-  (lambda (throw)
-    (not (null? (catchbody throw)))
-    )
+  (lambda (expr)
+    (if (not(null? (car (finally expr))))
+    (equal? (caar (finally expr)) 'finally)
+    #f)
   )
-  
-(define finally_block
-  (lambda (throw)
-    (finallybody throw)
-    )
   )
   
 (define catch_block
-  (lambda (throw)
-    (catchbody throw)
+  (lambda (s)
+    (if (hascatch s)
+    (bodyofcatch(catch s))
+    '())
     )
   )
 
-; throws the exception to the try block or finally
-(define Mstate_throw-cps
-  (lambda (expr throw)
-    (cond
-      ((procedure? throw) (throw(exeption expr)))
-      ((hascatchandfinally throw) (executecatchfinally throw))
-      ((hascatch throw) (executecatch throw))
-      (else (executefinally expr))
-      )
+(define finally_block
+  (lambda (s)
+    (if (hasfinally s)
+    (bodyoffinally(finally s))
+    '())
     )
   )
   
-;abstractions for throw TODO: Fill in execute statements
+;abstractions for throw
 (define exeption cadr)
   
-(define executecatch
-  (lambda (throw)
-    error 'unimplemented
-    )
-  )
- 
-(define executecatchfinally
-  (lambda (throw)
-    error 'unimplemented
-    )
+(define executecatch;(interpret_parse_tree (catch_block expr) s return function_return break continue throw)
+  (lambda (expr s return function_return break continue throw)
+    (interpret_parse_tree expr s return function_return break continue throw))
   )
   
 (define executefinally
-  (lambda (throw)
-    error 'unimplemented
-    )
+  (lambda (expr s return function_return break continue throw)
+    (interpret_parse_tree expr s return function_return break continue throw)
+  )
   )
     
 

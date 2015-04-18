@@ -21,4 +21,10 @@
 (check-eq? (interpretFunction "tests3/16") 64)
 (check-exn exn:fail? (lambda () (interpretFunction "tests3/17")))
 
+(check-eq? (interpretFunction "tests3/tc1") 9)
+(check-eq? (interpretFunction "tests3/tc2") 7)
+(check-eq? (interpretFunction "tests3/tc3") 9)
+(check-eq? (interpretFunction "tests3/tc4") 9)
+(check-eq? (interpretFunction "tests3/tc5") 9)
+
 (display "passed all of tests3\n")

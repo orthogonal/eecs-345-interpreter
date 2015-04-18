@@ -95,6 +95,7 @@
         ((eq? nextsymbol 'if) (if-parse))
         ((eq? nextsymbol 'while) (while-parse))
         ((eq? nextsymbol 'function) (function-parse))
+        ((eq? nextsymbol 'try) (try-parse))
         ((eq? nextsymbol 'LEFTBRACE) (cons 'begin (compound-statement-parse)))
         (else (begin
                 (unget-next-symbol)
@@ -111,6 +112,7 @@
               ((eq? (car nextsymbol) 'var) (set! parse-statement (declare-parse)))
               ((eq? (car nextsymbol) 'break) (set! parse-statement (list 'break)))
               ((eq? (car nextsymbol) 'continue) (set! parse-statement (list 'continue)))
+              ((eq? (car nextsymbol) 'throw) (set! parse-statement (list 'throw (value-parse))))
               ((eq? (car nextsymbol) 'ID) (set! parse-statement (id-parse nextsymbol)))
               (else (set! parse-statement (assign-parse nextsymbol))))
          (if (eq? (car (get-next-symbol)) 'SEMICOLON)
@@ -148,6 +150,53 @@
                       (begin
                         (unget-next-symbol)
                         (list 'if condition if-statement)))))))))
+
+; parse a try block.  The try block is a compound statement followed by catch block and/or
+; a finally block
+
+(define try-parse
+  (lambda ()
+    (if (not (eq? (car (get-next-symbol)) 'LEFTBRACE))
+        (error 'parser "Left brace expected")
+        (let* ((tryblock (compound-statement-parse))
+               (catchblock (catch-parse))
+               (finallyblock (finally-parse)))
+          (if (and (null? catchblock) (null? finallyblock))
+              (error 'parser "try without catch of finally")
+              (list 'try tryblock catchblock finallyblock))))))
+
+; parse a catch block.  The catch block must contain a variable (the exception) inside
+; parentheses and then a block of code.
+
+(define catch-parse
+  (lambda ()
+    (let ((nextsymbol (car (get-next-symbol))))
+      (if (not (eq? nextsymbol 'catch))
+          (begin
+            (unget-next-symbol)
+            '())
+          (let* ((firstsymbol (get-next-symbol))
+                 (secondsymbol (get-next-symbol))
+                 (thirdsymbol (get-next-symbol))
+                 (fourthsymbol (get-next-symbol)))
+            (cond ((not (eq? (car firstsymbol) 'LEFTPAREN)) (error 'parser "Missing left parenthesis"))
+                  ((not (eq? (car secondsymbol) 'ID)) (error 'parser "Missing exception parameter"))
+                  ((not (eq? (car thirdsymbol) 'RIGHTPAREN)) (error 'parser "Missing closing parenthesis"))
+                  ((not (eq? (car fourthsymbol) 'LEFTBRACE)) (error 'parser "Missing opening brace"))
+                  (else (list 'catch (list (cdr secondsymbol)) (compound-statement-parse)))))))))
+
+; parse a finally block.  A finally block is a compound statement that starts with "finally"
+
+(define finally-parse
+  (lambda ()
+    (let ((nextsymbol (get-next-symbol)))
+      (if (not (eq? (car nextsymbol) 'finally))
+          (begin
+            (unget-next-symbol)
+            '())
+          (if (not (eq? (car (get-next-symbol)) 'LEFTBRACE))
+              (error 'parser "Missing opening parenthesis")
+              (list 'finally (compound-statement-parse)))))))
 
 ; parse a while statement: a condition followed by a statement
 

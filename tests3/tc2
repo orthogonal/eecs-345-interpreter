@@ -1,0 +1,13 @@
+function main() {
+var x;
+var y;
+y = 0;
+try {
+  x = 5;
+  throw y;
+}
+catch(e){
+  x = 7;
+}
+return x;
+}
