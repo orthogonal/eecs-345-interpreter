@@ -499,7 +499,7 @@
       ((equal? (operator expr) '%) (return (modulo (left_op_val expr s) (right_op_val expr s))))
       ((equal? (operator expr) 'funcall) (Mvalue_function_call-cps expr s (lambda (v) (return v))))
       ((logical_operator? (operator expr)) (Mboolean-cps expr s (lambda (v) (return v))))
-      ((equal? (operator expr) 'dot) (get_field_binding_in_class (caddr expr) (cadr expr) s))
+      ((equal? (operator expr) 'dot) (get_field_binding (caddr expr) (cadr expr) s))
       (error "Invalid expression for Mvalue")
       )
     ))
