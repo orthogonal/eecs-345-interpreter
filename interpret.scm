@@ -99,18 +99,13 @@
 ; This is done by treating a function as a subprogram and returning the 'return binding in the resulting state
 (define Mvalue_function_call-cps
   (lambda (expr s return class_name)
-    (display s)
-    (display "\n")
-    (display (get_function_environment expr class_name s))
-    (display "\n")
-    (display expr)
     (if (eq? (get_closure (functionname expr) class_name s) 'error)
       (error "calling undefined function")
       (return (get_binding 'return
           (interpret_parse_tree_return
             (get_function_body (get_closure (functionname expr) class_name s))
              (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure (functionname expr) class_name s)) s
-               (add_layer (get_function_environment expr class_name s)) new_return_continuation)
+               (add_layer (get_function_environment expr class_name s)) new_return_continuation class_name)
              new_return_continuation break_error continue_error throw_error class_name)))
     )
   )
@@ -122,16 +117,16 @@
 
 ; Evaluates the actual params and binds their values to the formal params
 (define bind_parameters-cps
-  (lambda (actual_params formal_params s functionenv return)
+  (lambda (actual_params formal_params s functionenv return class_name)
     (cond
       ((null? actual_params) (return functionenv))
       (else (Mvalue-cps (car actual_params) s
                         (lambda (v) (bind_parameters-cps (cdr actual_params) (cdr formal_params) s
                                                          (add_to_state (car formal_params) v functionenv)
                                                          (lambda (v2) (return v2)
-                                                           ))
-                          )
-                        ))
+                                                           ) class_name)
+                          ) class_name)
+       )
       )
     )
   )
@@ -497,9 +492,9 @@
       ((equal? (operator expr) '*) (return (* (left_op_val expr s) (right_op_val expr s))))
       ((equal? (operator expr) '/) (return (/ (- (left_op_val expr s) (modulo (left_op_val expr s) (right_op_val expr s))) (right_op_val expr s)))) ; Integer division:  (x - (x % y)) / y
       ((equal? (operator expr) '%) (return (modulo (left_op_val expr s) (right_op_val expr s))))
-      ((equal? (operator expr) 'funcall) (Mvalue_function_call-cps expr s (lambda (v) (return v))))
-      ((logical_operator? (operator expr)) (Mboolean-cps expr s (lambda (v) (return v))))
-      ((equal? (operator expr) 'dot) (get_field_binding (caddr expr) (cadr expr) s))
+      ((equal? (operator expr) 'funcall) (Mvalue_function_call-cps expr s (lambda (v) (return v)) class_name))
+      ((logical_operator? (operator expr)) (Mboolean-cps expr s (lambda (v) (return v)) class_name))
+      ((equal? (operator expr) 'dot) (return (get_field_binding (caddr expr) (cadr expr) s)))
       (error "Invalid expression for Mvalue")
       )
     ))
@@ -515,14 +510,14 @@
 ; and if it's an arithmetic comparison, do the corresponding scheme expression
 ;    with the Mvalues of the operands.
 (define Mboolean-cps
-  (lambda (expr s return)
+  (lambda (expr s return class_name)
     (cond
       ((boolean? expr) (return expr))
       ((equal? expr 'true) (return #t))
       ((equal? expr 'false) (return #f))
-      ((not (list? expr)) (return (get_field_binding expr s class_name)))
-      ((equal? (car expr) '||) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (or v1 v2)))))))
-      ((equal? (car expr) '&&) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (and v1 v2)))))))
+      ((not (list? expr)) (return (get_field_binding expr class_name s)))
+      ((equal? (car expr) '||) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (or v1 v2))) class_name)) class_name))
+      ((equal? (car expr) '&&) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (and v1 v2))) class_name)) class_name))
       ((equal? (car expr) '!=) (return (not (equal? (left_op_val expr s) (right_op_val expr s)))))
       ((equal? (car expr) '!) (Mboolean-cps (cadr expr) s (lambda (v) (return (not v)))))
       ((equal? (car expr) '>) (return (> (left_op_val expr s) (right_op_val expr s))))
@@ -534,7 +529,7 @@
                                                                        (cond
                                                                          ((equal? v 'true) (return #t))
                                                                          ((equal? v 'false) (return #f))
-                                                                         (return v)))))
+                                                                         (return v))) class_name))
       )
     ))
 
@@ -792,7 +787,7 @@
             ((equal? 'static-function (car (car body)))
                 (cond
                     ((null? (cddr (car body))) (get_method_environment (cdr body) (add_to_state (cadr (car body)) 'null env) s))
-                    (else (get_method_environment (cdr body) (add_to_state (cadr (car body)) (make_closure (car body) s class_name) s) s class_name))
+                    (else (get_method_environment (cdr body) (add_to_state (cadr (car body)) (make_closure (car body) s class_name) env) s class_name))
                 )
             )
             (else (get_method_environment (cdr body) env s class_name))
@@ -803,6 +798,11 @@
 ; If the class name exists, search its field_environment list for the (tbc)
 (define get_field_binding
     (lambda (key class_name s)
+      (display "\n")
+      (display "\n") 
+      (display key)
+      (display "\n")
+      (display s)
         (cond
             ((and (list? key) (eq? 'dot (car key))) (cond   ; (dot A x) or (dot super x)
                 ((eq? 'super (cadr key)) (get_field_binding (caddr key) (parent (get_binding class_name s)) s))
@@ -917,4 +917,7 @@
 ;(initial_environment (parser "tests4/2") 'A)
 ;(state_remainder 'A (initial_environment (parser "tests4/2") 'A))
 ;(interpretClass "tests4/2" 'A)
+(parser "tests4/4")
+(initial_environment (parser "tests4/4") 'A)
+(interpretClass "tests4/4" 'A)
 
