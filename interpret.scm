@@ -131,13 +131,6 @@
     )
   )
 
-; Looks up and returns function closure from state
-;(define get_closure
-;  (lambda (expr s)
-;    (get_binding (functionname expr) s)
-;    )
-;  )
-
 ; Adds an entry to the state of (function_name function_closure)
 (define Mstate_function_def-cps
   (lambda (expr s return class_name)
@@ -215,7 +208,7 @@
              (parse_tree_remainder parse_tree) 
              (Mstate-cps (parse_tree_statement parse_tree) 
                          state return function_return break continue throw class_name) 
-             return function_return break continue throw))
+             return function_return break continue throw class_name))
       )
     )
   )
@@ -285,7 +278,6 @@
 
 ; Adds the return value into the state under name 'return
 (define Mstate_return-cps
-
   (lambda (expr s function_return class_name)
     (function_return (set_binding 'return (Mvalue-cps (returnexpr expr) s (lambda (v) v) class_name) s))
     )
@@ -515,7 +507,8 @@
       ((boolean? expr) (return expr))
       ((equal? expr 'true) (return #t))
       ((equal? expr 'false) (return #f))
-      ((not (list? expr)) (return (get_field_binding expr class_name s)))
+      ((and (not (list? expr)) (eq? (get_binding expr s) 'error)) (return (get_field_binding expr class_name s)))
+      ((not (list? expr)) (return (get_binding expr s)))
       ((equal? (car expr) '||) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (or v1 v2))) class_name)) class_name))
       ((equal? (car expr) '&&) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (and v1 v2))) class_name)) class_name))
       ((equal? (car expr) '!=) (return (not (equal? (left_op_val expr s) (right_op_val expr s)))))
@@ -798,11 +791,6 @@
 ; If the class name exists, search its field_environment list for the (tbc)
 (define get_field_binding
     (lambda (key class_name s)
-      (display "\n")
-      (display "\n") 
-      (display key)
-      (display "\n")
-      (display s)
         (cond
             ((and (list? key) (eq? 'dot (car key))) (cond   ; (dot A x) or (dot super x)
                 ((eq? 'super (cadr key)) (get_field_binding (caddr key) (parent (get_binding class_name s)) s))
