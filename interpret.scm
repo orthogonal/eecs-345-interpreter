@@ -269,8 +269,8 @@
 (define Mstate_eq-cps
   (lambda (expr s return)
     (cond
-      ((defined_in_layer? (varname expr) (top_layer s)) (return (set_binding (varname expr) (right_op_val expr s) s)))
-      ((defined? (varname expr) s) (return (update_binding (varname expr) (right_op_val expr s) s)))
+      ((defined_in_layer? (varname expr) (top_layer s)) (return (set_binding (varname expr) (right_op_val expr s class_name) s)))
+      ((defined? (varname expr) s) (return (update_binding (varname expr) (right_op_val expr s class_name) s)))
       (else (error "Variable undefined or out of scope"))
       )
     )
@@ -476,14 +476,14 @@
       ((equal? expr 'true) (return #t))
       ((equal? expr 'false) (return #f))
       ((not (list? expr)) (return (get_field_binding expr class_name s)))
-      ((equal? (operator expr) '+) (return (+ (left_op_val expr s) (right_op_val expr s))))
+      ((equal? (operator expr) '+) (return (+ (left_op_val expr s class_name) (right_op_val expr s class_name))))
       ((equal? (operator expr) '-)
        (if (null? (cddr expr)) 
-           (return (- 0 (left_op_val expr s)))
-           (return (- (left_op_val expr s) (right_op_val expr s)))))
-      ((equal? (operator expr) '*) (return (* (left_op_val expr s) (right_op_val expr s))))
-      ((equal? (operator expr) '/) (return (/ (- (left_op_val expr s) (modulo (left_op_val expr s) (right_op_val expr s))) (right_op_val expr s)))) ; Integer division:  (x - (x % y)) / y
-      ((equal? (operator expr) '%) (return (modulo (left_op_val expr s) (right_op_val expr s))))
+           (return (- 0 (left_op_val expr s class_name)))
+           (return (- (left_op_val expr s class_name) (right_op_val expr s class_name)))))
+      ((equal? (operator expr) '*) (return (* (left_op_val expr s class_name) (right_op_val expr s class_name))))
+      ((equal? (operator expr) '/) (return (/ (- (left_op_val expr s class_name) (modulo (left_op_val expr s class_name) (right_op_val expr s class_name))) (right_op_val expr s class_name)))) ; Integer division:  (x - (x % y)) / y
+      ((equal? (operator expr) '%) (return (modulo (left_op_val expr s class_name) (right_op_val expr s class_name))))
       ((equal? (operator expr) 'funcall) (Mvalue_function_call-cps expr s (lambda (v) (return v)) class_name))
       ((logical_operator? (operator expr)) (Mboolean-cps expr s (lambda (v) (return v)) class_name))
       ((equal? (operator expr) 'dot) (return (get_field_binding (caddr expr) (cadr expr) s)))
@@ -511,13 +511,13 @@
       ((not (list? expr)) (return (get_binding expr s)))
       ((equal? (car expr) '||) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (or v1 v2))) class_name)) class_name))
       ((equal? (car expr) '&&) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (and v1 v2))) class_name)) class_name))
-      ((equal? (car expr) '!=) (return (not (equal? (left_op_val expr s) (right_op_val expr s)))))
+      ((equal? (car expr) '!=) (return (not (equal? (left_op_val expr s class_name) (right_op_val expr s class_name)))))
       ((equal? (car expr) '!) (Mboolean-cps (cadr expr) s (lambda (v) (return (not v)))))
-      ((equal? (car expr) '>) (return (> (left_op_val expr s) (right_op_val expr s))))
-      ((equal? (car expr) '<) (return (< (left_op_val expr s) (right_op_val expr s))))
-      ((equal? (car expr) '>=) (return (>= (left_op_val expr s) (right_op_val expr s))))
-      ((equal? (car expr) '<=) (return (<= (left_op_val expr s) (right_op_val expr s))))
-      ((equal? (car expr) '==) (return (equal? (left_op_val expr s) (right_op_val expr s))))
+      ((equal? (car expr) '>) (return (> (left_op_val expr s class_name) (right_op_val expr s class_name))))
+      ((equal? (car expr) '<) (return (< (left_op_val expr s class_name) (right_op_val expr s class_name))))
+      ((equal? (car expr) '>=) (return (>= (left_op_val expr s class_name) (right_op_val expr s class_name))))
+      ((equal? (car expr) '<=) (return (<= (left_op_val expr s class_name) (right_op_val expr s class_name))))
+      ((equal? (car expr) '==) (return (equal? (left_op_val expr s class_name) (right_op_val expr s class_name))))
       ((equal? (car expr) 'funcall) (Mvalue_function_call-cps expr s (lambda (v)
                                                                        (cond
                                                                          ((equal? v 'true) (return #t))
@@ -527,13 +527,13 @@
     ))
 
 (define left_op_val
-  (lambda (expr s)
-    (Mvalue-cps (cadr expr) s (lambda (v) v))
+  (lambda (expr s class_name)
+    (Mvalue-cps (cadr expr) s (lambda (v) v) class_name)
     ))
 
 (define right_op_val
-  (lambda (expr s)
-    (Mvalue-cps (caddr expr) s (lambda (v) v))
+  (lambda (expr s class_name)
+    (Mvalue-cps (caddr expr) s (lambda (v) v) class_name)
     ))
 
 (define logical_operator?
@@ -905,7 +905,7 @@
 ;(initial_environment (parser "tests4/2") 'A)
 ;(state_remainder 'A (initial_environment (parser "tests4/2") 'A))
 ;(interpretClass "tests4/2" 'A)
-(parser "tests4/4")
-(initial_environment (parser "tests4/4") 'A)
-(interpretClass "tests4/4" 'A)
+(parser "tests4/5")
+(initial_environment (parser "tests4/5") 'A)
+(interpretClass "tests4/5" 'A)
 
