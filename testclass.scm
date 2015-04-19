@@ -16,7 +16,7 @@
 (check-eq? (interpretClass "tests4/8" 'B) 615)
 (check-exn exn:fail? (lambda () (interpretClass "tests4/9" 'B)))
 (check-eq? (interpretClass "tests4/9" 'C) 4321)
-;(check-eq? (interpretClass "tests3/10" 'Square) 400)
+(check-eq? (interpretClass "tests4/10" 'Square) 400)
 (check-eq? (interpretClass "tests4/11" 'A) 15)
 (check-eq? (interpretClass "tests4/12" 'A) 125)
 (check-eq? (interpretClass "tests4/13" 'A) 100)
