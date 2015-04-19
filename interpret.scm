@@ -935,6 +935,7 @@
       ))
       (else
         (cond
+          ((defined? key s) (update_binding key val s))
           ((equal? 'null class_name) (set_binding key val s))
           ((equal? 'error (get_binding class_name s)) 'error)
           (else (set_field_binding_in_class key val (get_binding class_name s) s))
@@ -1010,7 +1011,7 @@
 ;(initial_environment (parser "tests4/2") 'A)
 ;(state_remainder 'A (initial_environment (parser "tests4/2") 'A))
 ;(interpretClass "tests4/2" 'A)
-(parser "tests4/6")
-(initial_environment (parser "tests4/6") 'B)
-(interpretClass "tests4/6" 'B)
+(parser "tests4/7")
+(initial_environment (parser "tests4/7") 'A)
+(interpretClass "tests4/7" 'A)
 
