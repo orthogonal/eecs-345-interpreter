@@ -99,14 +99,21 @@
 ; This is done by treating a function as a subprogram and returning the 'return binding in the resulting state
 (define Mvalue_function_call-cps
   (lambda (expr s return class_name)
-    (if (eq? (get_closure (functionname expr) class_name s) 'error)
+    (display "\n\n")
+    (display "mvalue function call: ")
+    (display class_name)
+    (display "\n")
+    (display expr)
+    (display "\n")
+    (display s)
+    (if (eq? (get_closure (functionname expr)  (get_function_class expr s class_name) s) 'error)
       (error "calling undefined function")
       (return (get_binding 'return
           (interpret_parse_tree_return
-            (get_function_body (get_closure (functionname expr) class_name s))
-             (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure (functionname expr) class_name s)) s
-               (add_layer (get_function_environment expr class_name s)) new_return_continuation class_name)
-             new_return_continuation break_error continue_error throw_error class_name)))
+            (get_function_body (get_closure (functionname expr) (get_function_class expr s class_name) s))
+             (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure (functionname expr) (get_function_class expr s class_name) s)) s
+               (add_layer (get_function_environment expr  (get_function_class expr s class_name) s)) new_return_continuation class_name)
+             new_return_continuation break_error continue_error throw_error (get_function_class expr s class_name))))
     )
   )
 )
@@ -118,6 +125,15 @@
 ; Evaluates the actual params and binds their values to the formal params
 (define bind_parameters-cps
   (lambda (actual_params formal_params s functionenv return class_name)
+    (display "\n\n")
+    (display "bind params: ")
+    (display class_name)
+    (display "\n")
+    (display actual_params)
+    (display "\n")
+    (display formal_params)
+    (display "\n")
+    (display s)
     (cond
       ((null? actual_params) (return functionenv))
       (else (Mvalue-cps (car actual_params) s
@@ -151,16 +167,58 @@
 ; The initial state is returned, because the function will have updated any global vars via side effects
 (define Mstate_function_call-cps
   (lambda (expr s return throw class_name)
+    (display "\n\n")
+    (display "mstate function call: ")
+    (display class_name)
+    (display "\n")
+    (display expr)
+    (display "\n")
+    (display s)
+    (display "\n")
+    (display "function class: ")
+    (display (get_function_class expr s class_name))
+    (display "\n")
+    (display (get_closure (functionname expr) (get_function_class expr s class_name) s))
+  
     (begin
       (interpret_parse_tree_return
-       (get_function_body (get_closure expr class_name s))
-       (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure expr class_name s)) s
-                            (add_layer (get_function_environment expr class_name s)) new_return_continuation)
-       new_return_continuation break_error continue_error throw_error)
+       (get_function_body (get_closure (functionname expr) (get_function_class expr s class_name) s))
+       (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure (functionname expr) (get_function_class expr s class_name) s)) s
+                            (add_layer (get_function_environment expr (get_function_class expr s class_name) s)) new_return_continuation class_name)
+       new_return_continuation break_error continue_error throw_error (get_function_class expr s (get_function_class expr s class_name)))
       
       (return s)
       )
     ))
+
+(define get_function_class
+  (lambda (expr s class_name)
+    (cond
+      ((not (list? (cadr expr)))
+       (cond 
+         ((defined? (cadr expr) (method_environment (get_binding class_name s))) class_name)
+         ((eq? 'null class_name) (error "undefined function"))
+         (else (get_function_class expr s (parent (get_binding class_name s))))
+        ))
+      ((defined? (caddr (cadr expr)) (method_environment (get_binding (cadr (cadr expr)) s))) (cadr (cadr expr)))
+      (else (get_function_class expr s (parent (get_binding (cadr (cadr expr)) s)))))))
+
+(define get_field_class
+  (lambda (expr s class_name)
+    (display "\n\n")
+    (display "get field class: ")
+    (display class_name)
+    (display "\n")
+    (display expr)
+    (display "\n")
+    (display s)
+    (display "\n")
+    (display (eq? (cadr expr) 'super))
+    (display (parent (get_binding class_name s)))
+    (cond
+      ((eq? (cadr expr) 'super) (parent (get_binding class_name s)))
+      ((defined? (caddr expr) (field_environment (get_binding (cadr expr) s))) (cadr expr))
+      (else (get_field_class expr s (parent (get_binding (cadr expr) s)))))))
 
 ; Some abstractions for parsing out the pieces of a function definition expression
 (define functionname cadr)
@@ -178,7 +236,8 @@
 (define functionenvironment
   (lambda (name)
     (lambda (state)
-      (state_remainder name state)
+      ;(state_remainder name state)
+      state
       )
     )
   )
@@ -269,11 +328,19 @@
 ;   Mvalue evaluation of the right operand expression.
 (define Mstate_eq-cps
   (lambda (expr s return class_name)
-    (cond
-      ((defined_in_layer? (varname expr) (top_layer s)) (return (set_binding (varname expr) (right_op_val expr s class_name) s)))
-      ((defined? (varname expr) s) (return (update_binding (varname expr) (right_op_val expr s class_name) s)))
-      (else (error "Variable undefined or out of scope"))
-      )
+    (display "\n\n")
+    (display "mstate eq: ")
+    (display class_name)
+    (display "\n")
+    (display expr)
+    (display "\n")
+    (display s)
+    ;(cond
+    ;  ((defined_in_layer? (varname expr) (top_layer s)) (return (set_binding (varname expr) (right_op_val expr s class_name) s)))
+    ;  ((defined? (varname expr) s) (return (update_binding (varname expr) (right_op_val expr s class_name) s)))
+    ;  (else (error "Variable undefined or out of scope"))
+    ;  )
+    (return (set_field_binding (varname expr) (right_op_val expr s class_name) class_name s))
     )
   )
 
@@ -473,6 +540,7 @@
 (define Mvalue-cps
   (lambda (expr s return class_name)
     (display "\n\n")
+    (display "mvalue call: ")
     (display class_name)
     (display "\n")
     (display expr)
@@ -495,7 +563,7 @@
       ((equal? (operator expr) '%) (return (modulo (left_op_val expr s class_name) (right_op_val expr s class_name))))
       ((equal? (operator expr) 'funcall) (Mvalue_function_call-cps expr s (lambda (v) (return v)) class_name))
       ((logical_operator? (operator expr)) (Mboolean-cps expr s (lambda (v) (return v)) class_name))
-      ((equal? (operator expr) 'dot) (return (get_field_binding expr class_name s)))
+      ((equal? (operator expr) 'dot) (return (get_field_binding (caddr expr) (get_field_class expr s class_name) s)))
       (error "Invalid expression for Mvalue")
       )
     ))
@@ -820,6 +888,13 @@
 ; If the class name exists, search its field_environment list for the (tbc)
 (define get_field_binding
     (lambda (key class_name s)
+      (display "\n\n")
+      (display "get field binding: ")
+      (display class_name)
+      (display "\n")
+      (display key)
+      (display "\n")
+      (display s)
         (cond
             ((and (list? key) (eq? 'dot (car key))) (cond   ; (dot A x) or (dot super x)
                 ((eq? 'super (cadr key)) (get_field_binding (caddr key) (parent (get_binding class_name s)) s))
@@ -935,7 +1010,7 @@
 ;(initial_environment (parser "tests4/2") 'A)
 ;(state_remainder 'A (initial_environment (parser "tests4/2") 'A))
 ;(interpretClass "tests4/2" 'A)
-(parser "tests4/8")
-(initial_environment (parser "tests4/8") 'B)
-(interpretClass "tests4/8" 'B)
+(parser "tests4/6")
+(initial_environment (parser "tests4/6") 'B)
+(interpretClass "tests4/6" 'B)
 
