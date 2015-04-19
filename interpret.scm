@@ -471,11 +471,19 @@
 ; If none of the above, throw an error, expression is invalid.
 (define Mvalue-cps
   (lambda (expr s return class_name)
+    (display "\n\n")
+    (display class_name)
+    (display "\n")
+    (display expr)
+    (display "\n")
+    (display s)
     (cond
       ((number? expr) (return expr))
       ((equal? expr 'true) (return #t))
       ((equal? expr 'false) (return #f))
-      ((not (list? expr)) (return (get_field_binding expr class_name s)))
+      ((and (not (list? expr)) (eq? (get_binding expr s) 'error)) (return (get_field_binding expr class_name s)))
+      ((not (list? expr)) (return (get_binding expr s)))
+      ;((not (list? expr)) (return (get_field_binding expr class_name s)))
       ((equal? (operator expr) '+) (return (+ (left_op_val expr s class_name) (right_op_val expr s class_name))))
       ((equal? (operator expr) '-)
        (if (null? (cddr expr)) 
@@ -528,6 +536,15 @@
 
 (define left_op_val
   (lambda (expr s class_name)
+    (display "\n\n")
+    (display "left op val: ")
+    (display class_name)
+    (display "\n")
+    (display expr)
+    (display "\n")
+    (display s)
+    (display "\n")
+    (display (Mvalue-cps (cadr expr) s (lambda (v) v) class_name))
     (Mvalue-cps (cadr expr) s (lambda (v) v) class_name)
     ))
 
@@ -745,6 +762,12 @@
 
 (define class_def
     (lambda (d s)
+      (display "\n\n")
+      (display "class def: ")
+      (display (get_def_name d))
+      (display "\n")
+      (display s)
+       
         (cond
             ((null? (get_def_extends d)) (class_body_def (get_def_body d) new_class s (get_def_name d)))   ; ('null env ifn)
             (else (class_body_def (get_def_body d) (cons (get_def_parent_name d) (cdr new_class)) s (get_def_name d)))  ; (B env ifn)
@@ -755,21 +778,21 @@
 (define class_body_def ; change the second and third things in the class tuple to be the field/method envs.
     (lambda (body class s class_name)
         (cons (parent class)
-         (cons (get_field_environment body '(()) class_name)
+         (cons (get_field_environment body '(()) s class_name)
          (cons (get_method_environment body '(()) s class_name)
          (cdddr class))))))
 
 (define get_field_environment
-    (lambda (body env class_name)  ; env is i.e. field-environment
+    (lambda (body env s class_name)  ; env is i.e. field-environment
         (cond
             ((null? body) env)
             ((equal? 'static-var (car (car body)))
                 (cond
                     ((null? (cddr (car body))) (get_field_environment (cdr body) (add_to_state (cadr (car body)) 'null env)))
-                    (else (Mvalue-cps (caddr (car body)) env (lambda (v) (get_field_environment (cdr body) (add_to_state (cadr (car body)) v env) class_name)) class_name))
+                    (else (Mvalue-cps (caddr (car body)) s (lambda (v) (get_field_environment (cdr body) (add_to_state (cadr (car body)) v env) s class_name)) class_name))
                 )
             )
-            (else (get_field_environment (cdr body) env class_name))
+            (else (get_field_environment (cdr body) env s class_name))
         )))
 
 
@@ -906,7 +929,7 @@
 ;(initial_environment (parser "tests4/2") 'A)
 ;(state_remainder 'A (initial_environment (parser "tests4/2") 'A))
 ;(interpretClass "tests4/2" 'A)
-(parser "tests4/6")
-(initial_environment (parser "tests4/6") 'B)
-(interpretClass "tests4/6" 'B)
+(parser "tests4/7")
+(initial_environment (parser "tests4/7") 'A)
+;(interpretClass "tests4/7" 'A)
 
