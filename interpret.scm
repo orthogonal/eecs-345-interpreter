@@ -204,6 +204,7 @@
       ((not (list? (cadr expr)))
        (cond 
          ((defined? (cadr expr) (method_environment (get_binding class_name s))) class_name)
+         ((defined? (cadr expr) s) class_name)
          ((eq? 'null class_name) (error "undefined function"))
          (else (get_function_class expr s (parent (get_binding class_name s))))
         ))
@@ -1026,7 +1027,7 @@
 ;(initial_environment (parser "tests4/2") 'A)
 ;(state_remainder 'A (initial_environment (parser "tests4/2") 'A))
 ;(interpretClass "tests4/2" 'A)
-(parser "tests4/7")
-(initial_environment (parser "tests4/7") 'A)
-(interpretClass "tests4/7" 'A)
+;(parser "tests4/7")
+;(initial_environment (parser "tests4/7") 'A)
+;(interpretClass "tests4/7" 'A)
 
