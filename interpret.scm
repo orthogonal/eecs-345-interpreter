@@ -799,6 +799,7 @@
             (else 
                 (cond
                     ((equal? 'null class_name) (get_binding key s))
+                    ((not (equal? 'error (get_binding_layer key (car s)))) (get_binding_layer key (car s)))
                     ((equal? 'error (get_binding class_name s)) 'error)
                     (else (get_field_binding_in_class key (get_binding class_name s) s))
                 )
@@ -905,7 +906,7 @@
 ;(initial_environment (parser "tests4/2") 'A)
 ;(state_remainder 'A (initial_environment (parser "tests4/2") 'A))
 ;(interpretClass "tests4/2" 'A)
-(parser "tests4/5")
-(initial_environment (parser "tests4/5") 'A)
-(interpretClass "tests4/5" 'A)
+;(parser "tests4/5")
+;(initial_environment (parser "tests4/5") 'A)
+;(interpretClass "tests4/5" 'A)
 
