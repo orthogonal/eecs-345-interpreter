@@ -106,6 +106,9 @@
     (display expr)
     (display "\n")
     (display s)
+    (display "\n")
+    (display "calling function as: ")
+    (display (get_function_class expr s class_name))
     (if (eq? (get_closure (functionname expr)  (get_function_class expr s class_name) s) 'error)
       (error "calling undefined function")
       (return (get_binding 'return
@@ -181,13 +184,15 @@
     (display (functionname expr))
     (display "\n")
     (display (get_closure (functionname expr) (get_function_class expr s class_name) s))
+    (display "\ncalling function as: ")
+    (display (get_function_class expr s class_name))
   
     (begin
       (interpret_parse_tree_return
        (get_function_body (get_closure (functionname expr) (get_function_class expr s class_name) s))
        (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure (functionname expr) (get_function_class expr s class_name) s)) s
                             (add_layer (get_function_environment expr (get_function_class expr s class_name) s)) new_return_continuation class_name)
-       new_return_continuation break_error continue_error throw_error (get_function_class expr s (get_function_class expr s class_name)))
+       new_return_continuation break_error continue_error throw_error (get_function_class expr s class_name))
       
       (return s)
       )
@@ -202,7 +207,7 @@
          ((eq? 'null class_name) (error "undefined function"))
          (else (get_function_class expr s (parent (get_binding class_name s))))
         ))
-      ((eq? (cadr (cadr expr)) 'super) (parent (get_binding class_name s)))
+      ((equal? (cadr (cadr expr)) 'super) (parent (get_binding class_name s)))
       ((defined? (caddr (cadr expr)) (method_environment (get_binding (cadr (cadr expr)) s))) (cadr (cadr expr)))
       (else (get_function_class expr s (parent (get_binding (cadr (cadr expr)) s)))))))
 
@@ -935,6 +940,7 @@
 ; and it will fall-through to the regular set_binding operation.
 (define set_field_binding
   (lambda (key val class_name s)
+    (letrec ((class (get_binding class_name s)))
     (cond
       ((and (list? key) (eq? 'dot (car key))) (cond
         ((eq? 'super (cadr key)) (set_field_binding (caddr key) val (parent (get_binding class_name s)) s)) ; (dot parent x) call with parent class
@@ -942,13 +948,13 @@
       ))
       (else
         (cond
-          ((defined? key s) (update_binding key val s))
+          ((defined? key (field_environment class)) (set_binding class_name (list (parent class) (update_binding key val (field_environment class)) (method_environment class) (instance_field_names class)) s))
           ((equal? 'null class_name) (set_binding key val s))
           ((equal? 'error (get_binding class_name s)) 'error)
           (else (set_field_binding_in_class key val (get_binding class_name s) s))
         )
       )
-    )
+    ))
   )
 )
 
