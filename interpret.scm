@@ -302,7 +302,7 @@
       ((equal? (keyword expr) 'while)               (Mstate_while-cps expr s return function_return throw class_name))
       ((equal? (keyword expr) 'begin)               (Mstate_begin-cps expr s return function_return break continue throw class_name))
       ((equal? (keyword expr) 'funcall)             (Mstate_function_call-cps expr s return throw class_name))
-      ((equal? (keyword expr) 'try)                 (Mstate_try-cps expr s return function_return break continue throw))
+      ((equal? (keyword expr) 'try)                 (Mstate_try-cps expr s return function_return break continue throw class_name))
       ((equal? (keyword expr) 'throw)               (throw s))
       ((equal? (keyword expr) 'function)            (Mstate_function_def-cps expr s return class_name))
       ((equal? (keyword expr) 'break)               (break s))
@@ -421,33 +421,33 @@
 ;Evaluates the body of a try block and executes a try statement if an error is thrown
 ;The throw is the expr comming in which will be used for catch
 (define Mstate_try-cps
-  (lambda (expr s return function_return break continue throw)
+  (lambda (expr s return function_return break continue throw class_name)
     (if(hasfinally expr)
        (executefinally (finally_block expr) 
                        (try_catch expr s return 
                                   (lambda (v) 
-                                    (function_return (executefinally (finally_block expr) v return function_return break continue throw)) ;;??? maybe not funct_return twice
-                                    break continue throw)
-                                  break continue throw)
-                       return function_return break continue throw)
-       (try_catch expr s return function_return break continue throw)
+                                    (function_return (executefinally (finally_block expr) v return function_return break continue throw class_name)) ;;??? maybe not funct_return twice
+                                    break continue throw class_name)
+                                  break continue throw class_name)
+                       return function_return break continue throw class_name)
+       (try_catch expr s return function_return break continue throw class_name)
        )
 
     )
 )
 
 (define try_catch
-  (lambda (expr s return function_return break continue lastThrow)
+  (lambda (expr s return function_return break continue lastThrow class_name)
     (call/cc (lambda (throw)
                (if(hascatch expr)
                   (interpret_parse_tree 
                    (trybody expr) s return 
                    function_return
-                   break continue (lambda (v) (executecatch (catch_block expr) v return function_return break continue lastThrow)))
+                   break continue (lambda (v) (executecatch (catch_block expr) v return function_return break continue lastThrow class_name)) class_name)
                   (interpret_parse_tree 
                    (trybody expr) s return 
                    function_return
-                   break continue throw)
+                   break continue throw class_name)
                   )
                )
 
@@ -499,13 +499,13 @@
 (define exeption cadr)
   
 (define executecatch;(interpret_parse_tree (catch_block expr) s return function_return break continue throw)
-  (lambda (expr s return function_return break continue throw)
-    (interpret_parse_tree expr s return function_return break continue throw))
+  (lambda (expr s return function_return break continue throw class_name)
+    (interpret_parse_tree expr s return function_return break continue throw class_name))
   )
   
 (define executefinally
-  (lambda (expr s return function_return break continue throw)
-    (interpret_parse_tree expr s return function_return break continue throw)
+  (lambda (expr s return function_return break continue throw class_name)
+    (interpret_parse_tree expr s return function_return break continue throw class_name)
   )
   )
     
@@ -948,6 +948,7 @@
       ))
       (else
         (cond
+          ((defined_in_layer? key (top_layer s)) (set_binding key val s))
           ((defined? key (field_environment class)) (set_binding class_name (list (parent class) (update_binding key val (field_environment class)) (method_environment class) (instance_field_names class)) s))
           ((equal? 'null class_name) (set_binding key val s))
           ((equal? 'error (get_binding class_name s)) 'error)
@@ -1024,7 +1025,7 @@
 ;(initial_environment (parser "tests4/2") 'A)
 ;(state_remainder 'A (initial_environment (parser "tests4/2") 'A))
 ;(interpretClass "tests4/2" 'A)
-(parser "tests4/10")
-(initial_environment (parser "tests4/10") 'Square)
-(interpretClass "tests4/10" 'Square)
+(parser "tests4/12")
+(initial_environment (parser "tests4/12") 'A)
+(interpretClass "tests4/12" 'A)
 
