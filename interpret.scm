@@ -949,9 +949,10 @@
       (else
         (cond
           ((defined_in_layer? key (top_layer s)) (set_binding key val s))
+          ((defined? key s) (update_binding key val s))
+          ((equal? 'error (get_binding class_name s)) 'error)
           ((defined? key (field_environment class)) (set_binding class_name (list (parent class) (update_binding key val (field_environment class)) (method_environment class) (instance_field_names class)) s))
           ((equal? 'null class_name) (set_binding key val s))
-          ((equal? 'error (get_binding class_name s)) 'error)
           (else (set_field_binding_in_class key val (get_binding class_name s) s))
         )
       )
@@ -1025,7 +1026,7 @@
 ;(initial_environment (parser "tests4/2") 'A)
 ;(state_remainder 'A (initial_environment (parser "tests4/2") 'A))
 ;(interpretClass "tests4/2" 'A)
-(parser "tests4/13")
-(initial_environment (parser "tests4/13") 'A)
-(interpretClass "tests4/13" 'A)
+(parser "tests4/7")
+(initial_environment (parser "tests4/7") 'A)
+(interpretClass "tests4/7" 'A)
 
