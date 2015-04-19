@@ -178,6 +178,8 @@
     (display "function class: ")
     (display (get_function_class expr s class_name))
     (display "\n")
+    (display (functionname expr))
+    (display "\n")
     (display (get_closure (functionname expr) (get_function_class expr s class_name) s))
   
     (begin
@@ -200,6 +202,7 @@
          ((eq? 'null class_name) (error "undefined function"))
          (else (get_function_class expr s (parent (get_binding class_name s))))
         ))
+      ((eq? (cadr (cadr expr)) 'super) (parent (get_binding class_name s)))
       ((defined? (caddr (cadr expr)) (method_environment (get_binding (cadr (cadr expr)) s))) (cadr (cadr expr)))
       (else (get_function_class expr s (parent (get_binding (cadr (cadr expr)) s)))))))
 
@@ -221,7 +224,11 @@
       (else (get_field_class expr s (parent (get_binding (cadr expr) s)))))))
 
 ; Some abstractions for parsing out the pieces of a function definition expression
-(define functionname cadr)
+(define functionname 
+  (lambda (expr)
+  (cond
+    ((list? (cadr expr)) (caddr (cadr expr))) ;(funcall (dot super getSize) ..)
+    (else (cadr expr))))) ;(funcall getSize ...)
 (define arglist caddr)
 (define functionbody cadddr)
 
@@ -1011,7 +1018,7 @@
 ;(initial_environment (parser "tests4/2") 'A)
 ;(state_remainder 'A (initial_environment (parser "tests4/2") 'A))
 ;(interpretClass "tests4/2" 'A)
-(parser "tests4/7")
-(initial_environment (parser "tests4/7") 'A)
-(interpretClass "tests4/7" 'A)
+(parser "tests4/10")
+(initial_environment (parser "tests4/10") 'Square)
+(interpretClass "tests4/10" 'Square)
 
