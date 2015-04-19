@@ -141,7 +141,8 @@
 ; Adds an entry to the state of (classname class_def)
 (define Mstate_class_def-cps
   (lambda (expr s return)
-    (return (set_binding (classname expr) (class_def expr s) s))))  ; No need to even pretend to be calling set_*_binding here, no inner classes.
+    (return (class_def expr s))
+  )); No need to even pretend to be calling set_*_binding here, no inner classes.
 
 (define classname cadr)
 
@@ -223,12 +224,12 @@
 (define Mstate-cps
   (lambda (expr s return function_return break continue throw class_name)
     (cond
-      ((equal? (keyword expr) 'var)                 (Mstate_var-cps expr s return))
-      ((equal? (keyword expr) '=)                   (Mstate_eq-cps expr s return))
+      ((equal? (keyword expr) 'var)                 (Mstate_var-cps expr s return class_name))
+      ((equal? (keyword expr) '=)                   (Mstate_eq-cps expr s return class_name))
       ((equal? (keyword expr) 'return)              (Mstate_return-cps expr s function_return class_name))
-      ((equal? (keyword expr) 'if)                  (Mstate_if-cps expr s return function_return break continue throw))
-      ((equal? (keyword expr) 'while)               (Mstate_while-cps expr s return function_return throw))
-      ((equal? (keyword expr) 'begin)               (Mstate_begin-cps expr s return function_return break continue throw))
+      ((equal? (keyword expr) 'if)                  (Mstate_if-cps expr s return function_return break continue throw class_name))
+      ((equal? (keyword expr) 'while)               (Mstate_while-cps expr s return function_return throw class_name))
+      ((equal? (keyword expr) 'begin)               (Mstate_begin-cps expr s return function_return break continue throw class_name))
       ((equal? (keyword expr) 'funcall)             (Mstate_function_call-cps expr s return throw))
       ((equal? (keyword expr) 'try)                 (Mstate_try-cps expr s return function_return break continue throw))
       ((equal? (keyword expr) 'throw)               (throw s))
@@ -249,12 +250,12 @@
 ; The calculated value is (Mvalue (caddr expr) s) or Mvalue(value)
 ; Init is false if no value, true if there is a value.
 (define Mstate_var-cps
-  (lambda (expr s return)
+  (lambda (expr s return class_name)
     (cond
       ((defined_in_layer? (varname expr) (top_layer s)) (error "Redefining variable"))
       ((null? (cddr expr)) (return (set_binding (varname expr) 'null s)))
       (else (Mvalue-cps (initialvalue expr) s (lambda (v) (return 
-                                                           (cons (car (set_binding (varname expr) v (top_layer_state s))) (remove_layer s))))))
+                                                           (cons (car (set_binding (varname expr) v (top_layer_state s))) (remove_layer s)))) class_name))
       )
     )
   )
@@ -267,7 +268,7 @@
 ; If it's an expression like (= x (+ 3 y)) set the binding to the
 ;   Mvalue evaluation of the right operand expression.
 (define Mstate_eq-cps
-  (lambda (expr s return)
+  (lambda (expr s return class_name)
     (cond
       ((defined_in_layer? (varname expr) (top_layer s)) (return (set_binding (varname expr) (right_op_val expr s class_name) s)))
       ((defined? (varname expr) s) (return (update_binding (varname expr) (right_op_val expr s class_name) s)))
@@ -291,11 +292,11 @@
 ; If it's false, return just the state unchanged if no else statement, and
 ;  Mstate(else-expr) if there is an else statement.
 (define Mstate_if-cps
-  (lambda (expr s return function_return break continue throw)
+  (lambda (expr s return function_return break continue throw class_name)
     (cond
-      ((Mboolean-cps (ifcond expr) s (lambda (v) v)) (Mstate-cps (iftruebody expr) s return function_return break continue throw))
+      ((Mboolean-cps (ifcond expr) s (lambda (v) v) class_name) (Mstate-cps (iftruebody expr) s return function_return break continue throw class_name))
       ((null? (ifnoelse expr)) s)
-      (else (Mstate-cps (iffalsebody expr) s return function_return break continue throw))
+      (else (Mstate-cps (iffalsebody expr) s return function_return break continue throw class_name))
       )
     )
   )
@@ -311,8 +312,8 @@
 ; IMPORTANT: the letrec here is necessary due to begin statements (eg functions) having global side effects
 ; If we reevaluated the state everywhere that new_state is used, a global var could be incremented over and over again
 (define Mstate_begin-cps
-  (lambda (expr s return function_return break continue throw)
-    (letrec ((new_state (interpret_parse_tree (begin_body expr) (add_layer s) return function_return (break_layer break) (continue_layer continue) throw)))
+  (lambda (expr s return function_return break continue throw class_name)
+    (letrec ((new_state (interpret_parse_tree (begin_body expr) (add_layer s) return function_return (break_layer break) (continue_layer continue) throw class_name)))
       (cond 
         ((defined? 'return new_state) (set_binding 'return (get_binding 'return (return new_state)) (remove_layer new_state)))
         (else (return (remove_layer new_state)))
@@ -434,13 +435,13 @@
 ;Takes (< i j) (= i (+ i 1)) s and return
 ;This part takes care of break and continue statements
 (define Mstate_while-cps
-  (lambda (expr s return function_return throw)
+  (lambda (expr s return function_return throw class_name)
     (call/cc (lambda (break)
                (letrec (
                         (loop (lambda (expr s)
                                 (cond
-                                  ((Mboolean-cps (whilecond expr) s (lambda (v) v))
-                                   (loop expr (Mstate-cps (whilebody expr) s return function_return break (continue loop expr return break) throw)))
+                                  ((Mboolean-cps (whilecond expr) s (lambda (v) v) class_name)
+                                   (loop expr (Mstate-cps (whilebody expr) s return function_return break (continue loop expr return break) throw class_name)))
                                   (else (break s)))
                                 ))) (loop expr s)
                  )
@@ -747,7 +748,7 @@
 (define remove_layer cdr)
 
 
-(define new_class '('null '(()) '(()) '()))
+(define new_class '(null (()) (()) ()))
 (define parent car)
 (define field_environment cadr)
 (define method_environment caddr)
@@ -760,54 +761,59 @@
     (lambda (d)
         (cadr (get_def_extends d))))
 
+; Returns the state having added the class (with its static fields and methods)
 (define class_def
     (lambda (d s)
-      (display "\n\n")
-      (display "class def: ")
-      (display (get_def_name d))
-      (display "\n")
-      (display s)
-       
         (cond
-            ((null? (get_def_extends d)) (class_body_def (get_def_body d) new_class s (get_def_name d)))   ; ('null env ifn)
-            (else (class_body_def (get_def_body d) (cons (get_def_parent_name d) (cdr new_class)) s (get_def_name d)))  ; (B env ifn)
+            ;Adds (classname new_class) to the state and calls class_body_def
+            ((null? (get_def_extends d)) (class_body_def (get_def_body d) (set_binding (get_def_name d) new_class s) (get_def_name d)))   ; ('null env ifn)
+            ;Adds (classname new_class_with_parent_name) to the state and calls class_body_def
+            (else (class_body_def (get_def_body d) (set_binding (get_def_name d) (cons (get_def_parent_name d) (cdr new_class)) s) (get_def_name d)))  ; (B env ifn)
         )
     )
 )
 
+; Returns the state having added the static fields and methods to the class
 (define class_body_def ; change the second and third things in the class tuple to be the field/method envs.
-    (lambda (body class s class_name)
-        (cons (parent class)
-         (cons (get_field_environment body '(()) s class_name)
-         (cons (get_method_environment body '(()) s class_name)
-         (cdddr class))))))
+    (lambda (body s class_name)
+      (cond
+        ((null? body) s)
+        ((equal? 'static-var (car (car body))) (class_body_def (cdr body) (add_to_field_environment (car body) s class_name) class_name)) ;add field to class's static fields
+        ((equal? 'static-function (car (car body))) (class_body_def (cdr body) (add_to_method_environment (car body) s class_name) class_name));add method to class's static methods
+        (else (class_body_def (cdr body) s class_name)))))
+        
 
-(define get_field_environment
-    (lambda (body env s class_name)  ; env is i.e. field-environment
+(define add_to_field_environment
+    (lambda (expr s class_name)
+        (letrec ((class (get_binding class_name s)))
         (cond
-            ((null? body) env)
-            ((equal? 'static-var (car (car body)))
-                (cond
-                    ((null? (cddr (car body))) (get_field_environment (cdr body) (add_to_state (cadr (car body)) 'null env)))
-                    (else (Mvalue-cps (caddr (car body)) s (lambda (v) (get_field_environment (cdr body) (add_to_state (cadr (car body)) v env) s class_name)) class_name))
-                )
-            )
-            (else (get_field_environment (cdr body) env s class_name))
-        )))
+          ((null? (cddr expr)) (set_binding class_name  (list (parent class) (set_binding (cadr expr) 'null (field_environment class)) (method_environment class) (instance_field_names class)) s))
+          (else (set_binding class_name (list (parent class) (set_binding (cadr expr) (Mvalue-cps (caddr expr) s new_return_continuation class_name) (field_environment class)) (method_environment class) (instance_field_names class)) s))
+          ))))
 
 
-(define get_method_environment
-    (lambda (body env s class_name)
+(define add_to_method_environment
+    (lambda (expr s class_name)
+        (letrec ((class (get_binding class_name s)))
+        (display "\n\n")
+        (display "class name in add_method: ")
+        (display class_name)
+        (display "\n")
+        (display expr)
+        (display "\n")
+        (display class)
+        (display "\n")
+        (display (cadr expr))
+        (display "\n")
+        (display (make_closure expr s class_name))
+        (display "\n")
+        (display (set_binding (cadr expr) (make_closure expr s class_name) (method_environment class)))
+        (display "\n")
+        (display (list (parent class) (field_environment class) (set_binding (cadr expr) (make_closure expr s class_name) (method_environment class)) (instance_field_names class)))
         (cond
-            ((null? body) env)
-            ((equal? 'static-function (car (car body)))
-                (cond
-                    ((null? (cddr (car body))) (get_method_environment (cdr body) (add_to_state (cadr (car body)) 'null env) s))
-                    (else (get_method_environment (cdr body) (add_to_state (cadr (car body)) (make_closure (car body) s class_name) env) s class_name))
-                )
-            )
-            (else (get_method_environment (cdr body) env s class_name))
-        )))
+          ((null? (cddr expr)) (set_binding class_name (list (parent class) (field_environment class) (set_binding (cadr expr) 'null (method_environment class)) (instance_field_names class))) s)
+          (else (set_binding class_name (list (parent class) (field_environment class) (set_binding (cadr expr) (make_closure expr s class_name) (method_environment class)) (instance_field_names class)) s))
+          ))))
 
 
 ; Gets i.e. A.x, you would call with (key=x, class_name=A, state=s)
@@ -931,5 +937,5 @@
 ;(interpretClass "tests4/2" 'A)
 (parser "tests4/7")
 (initial_environment (parser "tests4/7") 'A)
-;(interpretClass "tests4/7" 'A)
+(interpretClass "tests4/7" 'A)
 
