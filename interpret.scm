@@ -1025,7 +1025,7 @@
 ;(initial_environment (parser "tests4/2") 'A)
 ;(state_remainder 'A (initial_environment (parser "tests4/2") 'A))
 ;(interpretClass "tests4/2" 'A)
-(parser "tests4/12")
-(initial_environment (parser "tests4/12") 'A)
-(interpretClass "tests4/12" 'A)
+(parser "tests4/13")
+(initial_environment (parser "tests4/13") 'A)
+(interpretClass "tests4/13" 'A)
 
