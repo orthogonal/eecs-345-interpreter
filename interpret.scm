@@ -150,11 +150,11 @@
 ; Side effects are handled naturally by using boxed values
 ; The initial state is returned, because the function will have updated any global vars via side effects
 (define Mstate_function_call-cps
-  (lambda (expr s return throw)
+  (lambda (expr s return throw class_name)
     (begin
       (interpret_parse_tree_return
-       (get_function_body (get_closure expr s))
-       (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure expr s)) s
+       (get_function_body (get_closure expr class_name s))
+       (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure expr class_name s)) s
                             (add_layer (get_function_environment expr class_name s)) new_return_continuation)
        new_return_continuation break_error continue_error throw_error)
       
@@ -230,7 +230,7 @@
       ((equal? (keyword expr) 'if)                  (Mstate_if-cps expr s return function_return break continue throw class_name))
       ((equal? (keyword expr) 'while)               (Mstate_while-cps expr s return function_return throw class_name))
       ((equal? (keyword expr) 'begin)               (Mstate_begin-cps expr s return function_return break continue throw class_name))
-      ((equal? (keyword expr) 'funcall)             (Mstate_function_call-cps expr s return throw))
+      ((equal? (keyword expr) 'funcall)             (Mstate_function_call-cps expr s return throw class_name))
       ((equal? (keyword expr) 'try)                 (Mstate_try-cps expr s return function_return break continue throw))
       ((equal? (keyword expr) 'throw)               (throw s))
       ((equal? (keyword expr) 'function)            (Mstate_function_def-cps expr s return class_name))
@@ -935,7 +935,7 @@
 ;(initial_environment (parser "tests4/2") 'A)
 ;(state_remainder 'A (initial_environment (parser "tests4/2") 'A))
 ;(interpretClass "tests4/2" 'A)
-(parser "tests4/7")
-(initial_environment (parser "tests4/7") 'A)
-(interpretClass "tests4/7" 'A)
+(parser "tests4/8")
+(initial_environment (parser "tests4/8") 'B)
+(interpretClass "tests4/8" 'B)
 
