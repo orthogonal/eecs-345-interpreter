@@ -446,7 +446,7 @@
                    (trybody expr) s return 
                    function_return
                    break continue (lambda (v) (throw (executecatch (catch_block expr)
-                                                                   (set_binding (catchvariable (catch expr)) (get_binding (catchvalue v) (catchstate v)) s)
+                                                                   (set_binding (catchvariable (catch expr)) (Mvalue-cps (catchvalue v) (catchstate v) return lastThrow class_name) s)
                                                                    return function_return break continue lastThrow class_name))) class_name)
                   (interpret_parse_tree 
                    (trybody expr) s return 
@@ -454,7 +454,6 @@
                    break continue throw class_name)
                   )
                )
-
              )
     )
   )

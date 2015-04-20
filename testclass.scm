@@ -20,7 +20,7 @@
 (check-eq? (interpretClass "tests4/11" 'A) 15)
 (check-eq? (interpretClass "tests4/12" 'A) 125)
 (check-eq? (interpretClass "tests4/13" 'A) 100)
-(check-eq? (interpretClass "tests4/14" 'A) 400)
+(check-eq? (interpretClass "tests4/14" 'A) 2000400)
 (check-eq? (interpretClass "tests4/15" 'Pow) 64)
 
 (display "passed all of tests4\n")
