@@ -425,10 +425,9 @@
   (lambda (expr s return function_return break continue throw class_name)
     (if(hasfinally expr)
        (executefinally (finally_block expr) 
-                       (try_catch expr s return 
+                       (try_catch expr s return
                                   (lambda (v) 
-                                    (function_return (executefinally (finally_block expr) v return function_return break continue throw class_name)) ;;??? maybe not funct_return twice
-                                    break continue throw class_name)
+                                    (return (executefinally (finally_block expr) v return function_return break continue throw class_name)))
                                   break continue throw class_name)
                        return function_return break continue throw class_name)
        (try_catch expr s return function_return break continue throw class_name)
@@ -444,7 +443,7 @@
                   (interpret_parse_tree 
                    (trybody expr) s return 
                    function_return
-                   break continue (lambda (v) (function_return (executecatch (catch_block expr) (set_binding (catchvariable (catch expr)) (get_binding (catchvalue v) (catchstate v)) (catchstate v)) return function_return break continue lastThrow class_name))) class_name)
+                   break continue (lambda (v) (throw (executecatch (catch_block expr) (set_binding (catchvariable (catch expr)) (get_binding (catchvalue v) (catchstate v)) (catchstate v)) return function_return break continue lastThrow class_name))) class_name)
                   (interpret_parse_tree 
                    (trybody expr) s return 
                    function_return
