@@ -99,16 +99,16 @@
 ; This is done by treating a function as a subprogram and returning the 'return binding in the resulting state
 (define Mvalue_function_call-cps
   (lambda (expr s return throw class_name)
-    (display "\n\n")
-    (display "mvalue function call: ")
-    (display class_name)
-    (display "\n")
-    (display expr)
-    (display "\n")
-    (display s)
-    (display "\n")
-    (display "calling function as: ")
-    (display (get_function_class expr s class_name))
+    ;(display "\n\n")
+    ;(display "mvalue function call: ")
+    ;(display class_name)
+    ;(display "\n")
+    ;(display expr)
+    ;(display "\n")
+    ;(display s)
+    ;(display "\n")
+    ;(display "calling function as: ")
+    ;(display (get_function_class expr s class_name))
     (if (eq? (get_closure (functionname expr)  (get_function_class expr s class_name) s) 'error)
       (error "calling undefined function")
       (return (get_binding 'return
@@ -128,15 +128,15 @@
 ; Evaluates the actual params and binds their values to the formal params
 (define bind_parameters-cps
   (lambda (actual_params formal_params s functionenv return throw class_name)
-    (display "\n\n")
-    (display "bind params: ")
-    (display class_name)
-    (display "\n")
-    (display actual_params)
-    (display "\n")
-    (display formal_params)
-    (display "\n")
-    (display s)
+    ;(display "\n\n")
+    ;(display "bind params: ")
+    ;(display class_name)
+    ;(display "\n")
+    ;(display actual_params)
+    ;(display "\n")
+    ;(display formal_params)
+    ;(display "\n")
+    ;(display s)
     (cond
       ((null? actual_params) (return functionenv))
       (else (Mvalue-cps (car actual_params) s
@@ -170,22 +170,22 @@
 ; The initial state is returned, because the function will have updated any global vars via side effects
 (define Mstate_function_call-cps
   (lambda (expr s return throw class_name)
-    (display "\n\n")
-    (display "mstate function call: ")
-    (display class_name)
-    (display "\n")
-    (display expr)
-    (display "\n")
-    (display s)
-    (display "\n")
-    (display "function class: ")
-    (display (get_function_class expr s class_name))
-    (display "\n")
-    (display (functionname expr))
-    (display "\n")
-    (display (get_closure (functionname expr) (get_function_class expr s class_name) s))
-    (display "\ncalling function as: ")
-    (display (get_function_class expr s class_name))
+    ;(display "\n\n")
+    ;(display "mstate function call: ")
+    ;(display class_name)
+    ;(display "\n")
+    ;(display expr)
+    ;(display "\n")
+    ;(display s)
+    ;(display "\n")
+    ;(display "function class: ")
+    ;(display (get_function_class expr s class_name))
+    ;(display "\n")
+    ;(display (functionname expr))
+    ;(display "\n")
+    ;(display (get_closure (functionname expr) (get_function_class expr s class_name) s))
+    ;(display "\ncalling function as: ")
+    ;(display (get_function_class expr s class_name))
   
     (begin
       (interpret_parse_tree_return
@@ -214,16 +214,16 @@
 
 (define get_field_class
   (lambda (expr s class_name)
-    (display "\n\n")
-    (display "get field class: ")
-    (display class_name)
-    (display "\n")
-    (display expr)
-    (display "\n")
-    (display s)
-    (display "\n")
-    (display (eq? (cadr expr) 'super))
-    (display (parent (get_binding class_name s)))
+    ;(display "\n\n")
+    ;(display "get field class: ")
+    ;(display class_name)
+    ;(display "\n")
+    ;(display expr)
+    ;(display "\n")
+    ;(display s)
+    ;(display "\n")
+    ;(display (eq? (cadr expr) 'super))
+    ;(display (parent (get_binding class_name s)))
     (cond
       ((eq? (cadr expr) 'super) (parent (get_binding class_name s)))
       ((defined? (caddr expr) (field_environment (get_binding (cadr expr) s))) (cadr expr))
@@ -341,13 +341,13 @@
 ;   Mvalue evaluation of the right operand expression.
 (define Mstate_eq-cps
   (lambda (expr s return throw class_name)
-    (display "\n\n")
-    (display "mstate eq: ")
-    (display class_name)
-    (display "\n")
-    (display expr)
-    (display "\n")
-    (display s)
+    ;(display "\n\n")
+    ;(display "mstate eq: ")
+    ;(display class_name)
+    ;(display "\n")
+    ;(display expr)
+    ;(display "\n")
+    ;(display s)
     ;(cond
     ;  ((defined_in_layer? (varname expr) (top_layer s)) (return (set_binding (varname expr) (right_op_val expr s throw class_name) s)))
     ;  ((defined? (varname expr) s) (return (update_binding (varname expr) (right_op_val expr s throw class_name) s)))
@@ -421,6 +421,7 @@
 
 ;Evaluates the body of a try block and executes a try statement if an error is thrown
 ;The throw is the expr comming in which will be used for catch
+;This takes cares of the fi
 (define Mstate_try-cps
   (lambda (expr s return function_return break continue throw class_name)
     (if(hasfinally expr)
@@ -436,6 +437,7 @@
     )
 )
 
+;takes care of catch
 (define try_catch
   (lambda (expr s return function_return break continue lastThrow class_name)
     (call/cc (lambda (throw)
@@ -443,7 +445,9 @@
                   (interpret_parse_tree 
                    (trybody expr) s return 
                    function_return
-                   break continue (lambda (v) (throw (executecatch (catch_block expr) (set_binding (catchvariable (catch expr)) (get_binding (catchvalue v) (catchstate v)) (catchstate v)) return function_return break continue lastThrow class_name))) class_name)
+                   break continue (lambda (v) (throw (executecatch (catch_block expr)
+                                                                   (set_binding (catchvariable (catch expr)) (get_binding (catchvalue v) (catchstate v)) s)
+                                                                   return function_return break continue lastThrow class_name))) class_name)
                   (interpret_parse_tree 
                    (trybody expr) s return 
                    function_return
@@ -554,13 +558,13 @@
 ; If none of the above, throw an error, expression is invalid.
 (define Mvalue-cps
   (lambda (expr s return throw class_name)
-    (display "\n\n")
-    (display "mvalue call: ")
-    (display class_name)
-    (display "\n")
-    (display expr)
-    (display "\n")
-    (display s)
+    ;(display "\n\n")
+    ;(display "mvalue call: ")
+    ;(display class_name)
+    ;(display "\n")
+    ;(display expr)
+    ;(display "\n")
+    ;(display s)
     (cond
       ((number? expr) (return expr))
       ((equal? expr 'true) (return #t))
@@ -620,15 +624,15 @@
 
 (define left_op_val
   (lambda (expr s throw class_name)
-    (display "\n\n")
-    (display "left op val: ")
-    (display class_name)
-    (display "\n")
-    (display expr)
-    (display "\n")
-    (display s)
-    (display "\n")
-    (display (Mvalue-cps (cadr expr) s (lambda (v) v) throw class_name))
+    ;(display "\n\n")
+    ;(display "left op val: ")
+    ;(display class_name)
+    ;(display "\n")
+    ;(display expr)
+    ;(display "\n")
+    ;(display s)
+    ;(display "\n")
+    ;(display (Mvalue-cps (cadr expr) s (lambda (v) v) throw class_name))
     (Mvalue-cps (cadr expr) s (lambda (v) v) throw class_name)
     ))
 
@@ -878,21 +882,21 @@
 (define add_to_method_environment
     (lambda (expr s class_name)
         (letrec ((class (get_binding class_name s)))
-        (display "\n\n")
-        (display "class name in add_method: ")
-        (display class_name)
-        (display "\n")
-        (display expr)
-        (display "\n")
-        (display class)
-        (display "\n")
-        (display (cadr expr))
-        (display "\n")
-        (display (make_closure expr s class_name))
-        (display "\n")
-        (display (set_binding (cadr expr) (make_closure expr s class_name) (method_environment class)))
-        (display "\n")
-        (display (list (parent class) (field_environment class) (set_binding (cadr expr) (make_closure expr s class_name) (method_environment class)) (instance_field_names class)))
+        ;(display "\n\n")
+        ;(display "class name in add_method: ")
+        ;(display class_name)
+        ;(display "\n")
+        ;(display expr)
+        ;(display "\n")
+        ;(display class)
+        ;(display "\n")
+        ;(display (cadr expr))
+        ;(display "\n")
+        ;(display (make_closure expr s class_name))
+        ;(display "\n")
+        ;(display (set_binding (cadr expr) (make_closure expr s class_name) (method_environment class)))
+        ;(display "\n")
+        ;(display (list (parent class) (field_environment class) (set_binding (cadr expr) (make_closure expr s class_name) (method_environment class)) (instance_field_names class)))
         (cond
           ((null? (cddr expr)) (set_binding class_name (list (parent class) (field_environment class) (set_binding (cadr expr) 'null (method_environment class)) (instance_field_names class))) s)
           (else (set_binding class_name (list (parent class) (field_environment class) (set_binding (cadr expr) (make_closure expr s class_name) (method_environment class)) (instance_field_names class)) s))
@@ -903,13 +907,13 @@
 ; If the class name exists, search its field_environment list for the (tbc)
 (define get_field_binding
     (lambda (key class_name s)
-      (display "\n\n")
-      (display "get field binding: ")
-      (display class_name)
-      (display "\n")
-      (display key)
-      (display "\n")
-      (display s)
+      ;(display "\n\n")
+      ;(display "get field binding: ")
+      ;(display class_name)
+      ;(display "\n")
+      ;(display key)
+      ;(display "\n")
+      ;(display s)
         (cond
             ((and (list? key) (eq? 'dot (car key))) (cond   ; (dot A x) or (dot super x)
                 ((eq? 'super (cadr key)) (get_field_binding (caddr key) (parent (get_binding class_name s)) s))
