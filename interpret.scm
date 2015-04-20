@@ -45,12 +45,12 @@
 ; Runs the main function in the given class
 (define interpret_main_in_class
   (lambda (parsed class_name)
-    (Mvalue_function_call-cps '(funcall main) (initial_environment parsed class_name) new_return_continuation class_name)))
+    (Mvalue_function_call-cps '(funcall main) (initial_environment parsed class_name) new_return_continuation throw_error class_name)))
 
 ; Runs the main function
 (define interpret_main
   (lambda (parsed)
-    (Mvalue_function_call-cps '(funcall main) (initial_environment parsed) new_return_continuation)
+    (Mvalue_function_call-cps '(funcall main) (initial_environment parsed) throw_error new_return_continuation throw_error class_name)
     )
   )
 
@@ -86,8 +86,8 @@
 (define Mstate_outer-cps
   (lambda (expr s return class_name)
     (cond
-      ((equal? (keyword expr) 'var)       (Mstate_var-cps expr s return))
-      ((equal? (keyword expr) '=)         (Mstate_eq-cps expr s return))
+      ((equal? (keyword expr) 'var)       (Mstate_var-cps expr s return throw_error class_name))
+      ((equal? (keyword expr) '=)         (Mstate_eq-cps expr s throw_error return))
       ((equal? (keyword expr) 'function)  (Mstate_function_def-cps expr s return class_name))
       ((equal? (keyword expr) 'class)     (Mstate_class_def-cps expr s return))
       (else (return state))
@@ -98,7 +98,7 @@
 ; Evaluates a function call and returns its value
 ; This is done by treating a function as a subprogram and returning the 'return binding in the resulting state
 (define Mvalue_function_call-cps
-  (lambda (expr s return class_name)
+  (lambda (expr s return throw class_name)
     (display "\n\n")
     (display "mvalue function call: ")
     (display class_name)
@@ -115,8 +115,8 @@
           (interpret_parse_tree_return
             (get_function_body (get_closure (functionname expr) (get_function_class expr s class_name) s))
              (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure (functionname expr) (get_function_class expr s class_name) s)) s
-               (add_layer (get_function_environment expr  (get_function_class expr s class_name) s)) new_return_continuation class_name)
-             new_return_continuation break_error continue_error throw_error (get_function_class expr s class_name))))
+               (add_layer (get_function_environment expr  (get_function_class expr s class_name) s)) new_return_continuation throw class_name)
+             new_return_continuation break_error continue_error throw (get_function_class expr s class_name))))
     )
   )
 )
@@ -127,7 +127,7 @@
 
 ; Evaluates the actual params and binds their values to the formal params
 (define bind_parameters-cps
-  (lambda (actual_params formal_params s functionenv return class_name)
+  (lambda (actual_params formal_params s functionenv return throw class_name)
     (display "\n\n")
     (display "bind params: ")
     (display class_name)
@@ -143,8 +143,8 @@
                         (lambda (v) (bind_parameters-cps (cdr actual_params) (cdr formal_params) s
                                                          (add_to_state (car formal_params) v functionenv)
                                                          (lambda (v2) (return v2)
-                                                           ) class_name)
-                          ) class_name)
+                                                           ) throw class_name)
+                          ) throw class_name)
        )
       )
     )
@@ -191,8 +191,8 @@
       (interpret_parse_tree_return
        (get_function_body (get_closure (functionname expr) (get_function_class expr s class_name) s))
        (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure (functionname expr) (get_function_class expr s class_name) s)) s
-                            (add_layer (get_function_environment expr (get_function_class expr s class_name) s)) new_return_continuation class_name)
-       new_return_continuation break_error continue_error throw_error (get_function_class expr s class_name))
+                            (add_layer (get_function_environment expr (get_function_class expr s class_name) s)) new_return_continuation throw class_name)
+       new_return_continuation break_error continue_error throw (get_function_class expr s class_name))
       
       (return s)
       )
@@ -296,15 +296,15 @@
 (define Mstate-cps
   (lambda (expr s return function_return break continue throw class_name)
     (cond
-      ((equal? (keyword expr) 'var)                 (Mstate_var-cps expr s return class_name))
-      ((equal? (keyword expr) '=)                   (Mstate_eq-cps expr s return class_name))
-      ((equal? (keyword expr) 'return)              (Mstate_return-cps expr s function_return class_name))
+      ((equal? (keyword expr) 'var)                 (Mstate_var-cps expr s return throw class_name))
+      ((equal? (keyword expr) '=)                   (Mstate_eq-cps expr s return throw class_name))
+      ((equal? (keyword expr) 'return)              (Mstate_return-cps expr s function_return throw class_name))
       ((equal? (keyword expr) 'if)                  (Mstate_if-cps expr s return function_return break continue throw class_name))
       ((equal? (keyword expr) 'while)               (Mstate_while-cps expr s return function_return throw class_name))
       ((equal? (keyword expr) 'begin)               (Mstate_begin-cps expr s return function_return break continue throw class_name))
       ((equal? (keyword expr) 'funcall)             (Mstate_function_call-cps expr s return throw class_name))
       ((equal? (keyword expr) 'try)                 (Mstate_try-cps expr s return function_return break continue throw class_name))
-      ((equal? (keyword expr) 'throw)               (throw s))
+      ((equal? (keyword expr) 'throw)               (throw (list s expr)))
       ((equal? (keyword expr) 'function)            (Mstate_function_def-cps expr s return class_name))
       ((equal? (keyword expr) 'break)               (break s))
       ((equal? (keyword expr) 'continue)            (continue s))
@@ -322,12 +322,12 @@
 ; The calculated value is (Mvalue (caddr expr) s) or Mvalue(value)
 ; Init is false if no value, true if there is a value.
 (define Mstate_var-cps
-  (lambda (expr s return class_name)
+  (lambda (expr s return throw class_name)
     (cond
       ((defined_in_layer? (varname expr) (top_layer s)) (error "Redefining variable"))
       ((null? (cddr expr)) (return (set_binding (varname expr) 'null s)))
       (else (Mvalue-cps (initialvalue expr) s (lambda (v) (return 
-                                                           (cons (car (set_binding (varname expr) v (top_layer_state s))) (remove_layer s)))) class_name))
+                                                           (cons (car (set_binding (varname expr) v (top_layer_state s))) (remove_layer s)))) throw class_name))
       )
     )
   )
@@ -340,7 +340,7 @@
 ; If it's an expression like (= x (+ 3 y)) set the binding to the
 ;   Mvalue evaluation of the right operand expression.
 (define Mstate_eq-cps
-  (lambda (expr s return class_name)
+  (lambda (expr s return throw class_name)
     (display "\n\n")
     (display "mstate eq: ")
     (display class_name)
@@ -349,18 +349,18 @@
     (display "\n")
     (display s)
     ;(cond
-    ;  ((defined_in_layer? (varname expr) (top_layer s)) (return (set_binding (varname expr) (right_op_val expr s class_name) s)))
-    ;  ((defined? (varname expr) s) (return (update_binding (varname expr) (right_op_val expr s class_name) s)))
+    ;  ((defined_in_layer? (varname expr) (top_layer s)) (return (set_binding (varname expr) (right_op_val expr s throw class_name) s)))
+    ;  ((defined? (varname expr) s) (return (update_binding (varname expr) (right_op_val expr s throw class_name) s)))
     ;  (else (error "Variable undefined or out of scope"))
     ;  )
-    (return (set_field_binding (varname expr) (right_op_val expr s class_name) class_name s))
+    (return (set_field_binding (varname expr) (right_op_val expr s throw class_name) class_name s))
     )
   )
 
 ; Adds the return value into the state under name 'return
 (define Mstate_return-cps
-  (lambda (expr s function_return class_name)
-    (function_return (set_binding 'return (Mvalue-cps (returnexpr expr) s (lambda (v) v) class_name) s))
+  (lambda (expr s function_return throw class_name)
+    (function_return (set_binding 'return (Mvalue-cps (returnexpr expr) s (lambda (v) v) throw class_name) s))
     )
   )
 
@@ -374,7 +374,7 @@
 (define Mstate_if-cps
   (lambda (expr s return function_return break continue throw class_name)
     (cond
-      ((Mboolean-cps (ifcond expr) s (lambda (v) v) class_name) (Mstate-cps (iftruebody expr) s return function_return break continue throw class_name))
+      ((Mboolean-cps (ifcond expr) s (lambda (v) v) throw class_name) (Mstate-cps (iftruebody expr) s return function_return break continue throw class_name))
       ((null? (ifnoelse expr)) s)
       (else (Mstate-cps (iffalsebody expr) s return function_return break continue throw class_name))
       )
@@ -444,7 +444,7 @@
                   (interpret_parse_tree 
                    (trybody expr) s return 
                    function_return
-                   break continue (lambda (v) (executecatch (catch_block expr) v return function_return break continue lastThrow class_name)) class_name)
+                   break continue (lambda (v) (function_return (executecatch (catch_block expr) (set_binding (catchvariable (catch expr)) (get_binding (catchvalue v) (catchstate v)) (catchstate v)) return function_return break continue lastThrow class_name))) class_name)
                   (interpret_parse_tree 
                    (trybody expr) s return 
                    function_return
@@ -457,6 +457,9 @@
   )
 
 ;abstractions for try
+(define catchvariable caadar)
+(define catchstate car)
+(define catchvalue cadadr)
 (define trybody cadr)
 (define catch cddr)
 (define bodyofcatch caddar)
@@ -499,7 +502,7 @@
 ;abstractions for throw
 (define exeption cadr)
   
-(define executecatch;(interpret_parse_tree (catch_block expr) s return function_return break continue throw)
+(define executecatch
   (lambda (expr s return function_return break continue throw class_name)
     (interpret_parse_tree expr s return function_return break continue throw class_name))
   )
@@ -520,7 +523,7 @@
                (letrec (
                         (loop (lambda (expr s)
                                 (cond
-                                  ((Mboolean-cps (whilecond expr) s (lambda (v) v) class_name)
+                                  ((Mboolean-cps (whilecond expr) s (lambda (v) v) throw class_name)
                                    (loop expr (Mstate-cps (whilebody expr) s return function_return break (continue loop expr return break) throw class_name)))
                                   (else (break s)))
                                 ))) (loop expr s)
@@ -551,7 +554,7 @@
 ;  boolean evaluation of the expression.
 ; If none of the above, throw an error, expression is invalid.
 (define Mvalue-cps
-  (lambda (expr s return class_name)
+  (lambda (expr s return throw class_name)
     (display "\n\n")
     (display "mvalue call: ")
     (display class_name)
@@ -566,16 +569,16 @@
       ((and (not (list? expr)) (eq? (get_binding expr s) 'error)) (return (get_field_binding expr class_name s)))
       ((not (list? expr)) (return (get_binding expr s)))
       ;((not (list? expr)) (return (get_field_binding expr class_name s)))
-      ((equal? (operator expr) '+) (return (+ (left_op_val expr s class_name) (right_op_val expr s class_name))))
+      ((equal? (operator expr) '+) (return (+ (left_op_val expr s throw class_name) (right_op_val expr s throw class_name))))
       ((equal? (operator expr) '-)
        (if (null? (cddr expr)) 
-           (return (- 0 (left_op_val expr s class_name)))
-           (return (- (left_op_val expr s class_name) (right_op_val expr s class_name)))))
-      ((equal? (operator expr) '*) (return (* (left_op_val expr s class_name) (right_op_val expr s class_name))))
-      ((equal? (operator expr) '/) (return (/ (- (left_op_val expr s class_name) (modulo (left_op_val expr s class_name) (right_op_val expr s class_name))) (right_op_val expr s class_name)))) ; Integer division:  (x - (x % y)) / y
-      ((equal? (operator expr) '%) (return (modulo (left_op_val expr s class_name) (right_op_val expr s class_name))))
-      ((equal? (operator expr) 'funcall) (Mvalue_function_call-cps expr s (lambda (v) (return v)) class_name))
-      ((logical_operator? (operator expr)) (Mboolean-cps expr s (lambda (v) (return v)) class_name))
+           (return (- 0 (left_op_val expr s throw class_name)))
+           (return (- (left_op_val expr s throw class_name) (right_op_val expr s throw class_name)))))
+      ((equal? (operator expr) '*) (return (* (left_op_val expr s throw class_name) (right_op_val expr s throw class_name))))
+      ((equal? (operator expr) '/) (return (/ (- (left_op_val expr s throw class_name) (modulo (left_op_val expr s throw class_name) (right_op_val expr s throw class_name))) (right_op_val expr s throw class_name)))) ; Integer division:  (x - (x % y)) / y
+      ((equal? (operator expr) '%) (return (modulo (left_op_val expr s throw class_name) (right_op_val expr s throw class_name))))
+      ((equal? (operator expr) 'funcall) (Mvalue_function_call-cps expr s (lambda (v) (return v)) throw class_name))
+      ((logical_operator? (operator expr)) (Mboolean-cps expr s (lambda (v) (return v)) throw class_name))
       ((equal? (operator expr) 'dot) (return (get_field_binding (caddr expr) (get_field_class expr s class_name) s)))
       (error "Invalid expression for Mvalue")
       )
@@ -592,32 +595,32 @@
 ; and if it's an arithmetic comparison, do the corresponding scheme expression
 ;    with the Mvalues of the operands.
 (define Mboolean-cps
-  (lambda (expr s return class_name)
+  (lambda (expr s return throw class_name)
     (cond
       ((boolean? expr) (return expr))
       ((equal? expr 'true) (return #t))
       ((equal? expr 'false) (return #f))
       ((and (not (list? expr)) (eq? (get_binding expr s) 'error)) (return (get_field_binding expr class_name s)))
       ((not (list? expr)) (return (get_binding expr s)))
-      ((equal? (car expr) '||) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (or v1 v2))) class_name)) class_name))
-      ((equal? (car expr) '&&) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (and v1 v2))) class_name)) class_name))
-      ((equal? (car expr) '!=) (return (not (equal? (left_op_val expr s class_name) (right_op_val expr s class_name)))))
-      ((equal? (car expr) '!) (Mboolean-cps (cadr expr) s (lambda (v) (return (not v)))))
-      ((equal? (car expr) '>) (return (> (left_op_val expr s class_name) (right_op_val expr s class_name))))
-      ((equal? (car expr) '<) (return (< (left_op_val expr s class_name) (right_op_val expr s class_name))))
-      ((equal? (car expr) '>=) (return (>= (left_op_val expr s class_name) (right_op_val expr s class_name))))
-      ((equal? (car expr) '<=) (return (<= (left_op_val expr s class_name) (right_op_val expr s class_name))))
-      ((equal? (car expr) '==) (return (equal? (left_op_val expr s class_name) (right_op_val expr s class_name))))
+      ((equal? (car expr) '||) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (or v1 v2))) throw class_name)) throw class_name))
+      ((equal? (car expr) '&&) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (and v1 v2))) throw class_name)) throw class_name))
+      ((equal? (car expr) '!=) (return (not (equal? (left_op_val expr s throw class_name) (right_op_val expr s throw class_name)))))
+      ((equal? (car expr) '!) (Mboolean-cps (cadr expr) s (lambda (v) (return (not v))) throw class_name))
+      ((equal? (car expr) '>) (return (> (left_op_val expr s throw class_name) (right_op_val expr s throw class_name))))
+      ((equal? (car expr) '<) (return (< (left_op_val expr s throw class_name) (right_op_val expr s throw class_name))))
+      ((equal? (car expr) '>=) (return (>= (left_op_val expr s throw class_name) (right_op_val expr s throw class_name))))
+      ((equal? (car expr) '<=) (return (<= (left_op_val expr s throw class_name) (right_op_val expr s throw class_name))))
+      ((equal? (car expr) '==) (return (equal? (left_op_val expr s throw class_name) (right_op_val expr s throw class_name))))
       ((equal? (car expr) 'funcall) (Mvalue_function_call-cps expr s (lambda (v)
                                                                        (cond
                                                                          ((equal? v 'true) (return #t))
                                                                          ((equal? v 'false) (return #f))
-                                                                         (return v))) class_name))
+                                                                         (return v))) throw class_name))
       )
     ))
 
 (define left_op_val
-  (lambda (expr s class_name)
+  (lambda (expr s throw class_name)
     (display "\n\n")
     (display "left op val: ")
     (display class_name)
@@ -626,13 +629,13 @@
     (display "\n")
     (display s)
     (display "\n")
-    (display (Mvalue-cps (cadr expr) s (lambda (v) v) class_name))
-    (Mvalue-cps (cadr expr) s (lambda (v) v) class_name)
+    (display (Mvalue-cps (cadr expr) s (lambda (v) v) throw class_name))
+    (Mvalue-cps (cadr expr) s (lambda (v) v) throw class_name)
     ))
 
 (define right_op_val
-  (lambda (expr s class_name)
-    (Mvalue-cps (caddr expr) s (lambda (v) v) class_name)
+  (lambda (expr s throw class_name)
+    (Mvalue-cps (caddr expr) s (lambda (v) v) throw class_name)
     ))
 
 (define logical_operator?
@@ -869,7 +872,7 @@
         (letrec ((class (get_binding class_name s)))
         (cond
           ((null? (cddr expr)) (set_binding class_name  (list (parent class) (set_binding (cadr expr) 'null (field_environment class)) (method_environment class) (instance_field_names class)) s))
-          (else (set_binding class_name (list (parent class) (set_binding (cadr expr) (Mvalue-cps (caddr expr) s new_return_continuation class_name) (field_environment class)) (method_environment class) (instance_field_names class)) s))
+          (else (set_binding class_name (list (parent class) (set_binding (cadr expr) (Mvalue-cps (caddr expr) s new_return_continuation throw_error class_name) (field_environment class)) (method_environment class) (instance_field_names class)) s))
           ))))
 
 
