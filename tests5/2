@@ -1,0 +1,13 @@
+class A {
+  static var x = true;
+
+  static function main() {
+    var a = new A();
+    return a.instance_func();
+  }
+  
+  var y = false;
+  function instance_func(){
+    return y;
+  }
+}

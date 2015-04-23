@@ -581,12 +581,56 @@
       ((equal? (operator expr) '%) (return (modulo (left_op_val expr s throw class_name) (right_op_val expr s throw class_name))))
       ((equal? (operator expr) 'funcall) (Mvalue_function_call-cps expr s (lambda (v) (return v)) throw class_name))
       ((logical_operator? (operator expr)) (Mboolean-cps expr s (lambda (v) (return v)) throw class_name))
+      ((equal? (operator expr) 'new) (return (create_instance expr s)))
       ((equal? (operator expr) 'dot) (return (get_field_binding (caddr expr) (get_field_class expr s class_name) s)))
       (error "Invalid expression for Mvalue")
       )
     ))
 
 (define operator car)
+
+; Returns a tuple of (class_name instance_values)
+; Handles (new A)
+(define create_instance
+  (lambda (expr s)
+    (letrec ((class_name (cadr expr)))
+    (list class_name (initial_instance_values s class_name))
+    )))
+
+; Gets a list of instance field values (for this class and all parent classes) in reverse order of how they're defined
+(define all_initial_instance_values 
+  (lambda (s class_name)
+    (cond
+      ((eq? class_name 'null) '())
+      (else (append (all_initial_instance_values s (parent (get_binding class_name s))) (reverse (initial_instance_values s (top_layer (instance_field_environment (get_binding class_name s)))))))
+      )))
+
+; You shouldn't ever need to call this function; it's just a helper to the one above.
+; Gets a list of a single classes field values (does not include inherited values). These are not reversed.
+; The box/unbox is so that we don't change the default values on when we update a specific value (basically a copy operation)
+(define initial_instance_values
+  (lambda (s instance_environment)
+    (cond
+      ((null? instance_environment) '())
+      (else (cons (box (unbox (cadr (car instance_environment)))) (initial_instance_values s (cdr instance_environment))))
+      )))
+
+; Gets a list of instance field names (for this class and all parent classes) in order of how they're defined
+(define all_instance_field_names 
+  (lambda (s class_name)
+    (cond
+      ((eq? class_name 'null) '())
+      (else (append (instance_field_names s (top_layer (instance_field_environment (get_binding class_name s)))) (all_instance_field_names s (parent (get_binding class_name s))) ))
+      )))
+
+; You shouldn't ever need to call this function; it's just a helper to the one above.
+; Gets a list of a single classes field names (does not include inherited values). These are not reversed.
+(define instance_field_names
+  (lambda (s instance_environment)
+    (cond
+      ((null? instance_environment) '())
+      (else (cons (car (car instance_environment)) (instance_field_names s (cdr instance_environment))))
+      )))
 
 ; Returns the value of the boolean expression expr.
 ; If expr is #t or #f, just return those.
@@ -1042,7 +1086,9 @@
   )
 )
 
-(parser "tests5/1")
-(initial_environment (parser "tests5/1") 'A)
+(parser "tests5/3")
+(initial_environment (parser "tests5/3") 'A)
+(all_initial_instance_values (initial_environment (parser "tests5/3") 'A) 'B)
+(all_instance_field_names (initial_environment (parser "tests5/3") 'A) 'B)
 ;(interpretClass "tests4/7" 'A)
 
