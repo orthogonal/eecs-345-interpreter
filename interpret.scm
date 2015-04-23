@@ -203,13 +203,13 @@
     (cond
       ((not (list? (cadr expr)))
        (cond 
-         ((defined? (cadr expr) (method_environment (get_binding class_name s))) class_name)
+         ((defined? (cadr expr) (static_method_environment (get_binding class_name s))) class_name)
          ((defined? (cadr expr) s) class_name)
          ((eq? 'null class_name) (error "undefined function"))
          (else (get_function_class expr s (parent (get_binding class_name s))))
         ))
       ((equal? (cadr (cadr expr)) 'super) (parent (get_binding class_name s)))
-      ((defined? (caddr (cadr expr)) (method_environment (get_binding (cadr (cadr expr)) s))) (cadr (cadr expr)))
+      ((defined? (caddr (cadr expr)) (static_method_environment (get_binding (cadr (cadr expr)) s))) (cadr (cadr expr)))
       (else (get_function_class expr s (parent (get_binding (cadr (cadr expr)) s)))))))
 
 (define get_field_class
@@ -226,7 +226,7 @@
     ;(display (parent (get_binding class_name s)))
     (cond
       ((eq? (cadr expr) 'super) (parent (get_binding class_name s)))
-      ((defined? (caddr expr) (field_environment (get_binding (cadr expr) s))) (cadr expr))
+      ((defined? (caddr expr) (static_field_environment (get_binding (cadr expr) s))) (cadr expr))
       (else (get_field_class expr s (parent (get_binding (cadr expr) s)))))))
 
 ; Some abstractions for parsing out the pieces of a function definition expression
@@ -834,11 +834,16 @@
 (define remove_layer cdr)
 
 
-(define new_class '(null (()) (()) ()))
+; Class is a 5-tuple: (parent, static_field_environment, static_method_environment, instance_field_environment, instance_method_environment)
+(define new_class '( null (()) (()) (()) (()) ))
 (define parent car)
-(define field_environment cadr)
-(define method_environment caddr)
-(define instance_field_names cadddr)
+(define static_field_environment cadr)
+(define static_method_environment caddr)
+(define instance_field_environment cadddr)
+(define instance_method_environment 
+  (lambda (class)
+    (car (cddddr class)
+  )))
 
 (define get_def_name cadr)
 (define get_def_extends caddr)
@@ -864,46 +869,54 @@
     (lambda (body s class_name)
       (cond
         ((null? body) s)
-        ((equal? 'static-var (car (car body))) (class_body_def (cdr body) (add_to_field_environment (car body) s class_name) class_name)) ;add field to class's static fields
-        ((equal? 'static-function (car (car body))) (class_body_def (cdr body) (add_to_method_environment (car body) s class_name) class_name));add method to class's static methods
+        ((equal? 'static-var (car (car body))) (class_body_def (cdr body) (add_to_static_field_environment (car body) s class_name) class_name))       ;add static-field to class's static fields
+        ((equal? 'static-function (car (car body))) (class_body_def (cdr body) (add_to_static_method_environment (car body) s class_name) class_name)) ;add static-method to class's static methods
+        ((equal? 'var (car (car body))) (class_body_def (cdr body) (add_to_instance_field_environment (car body) s class_name) class_name))            ;add field to class's instance fields
+        ((equal? 'function (car (car body))) (class_body_def (cdr body) (add_to_instance_method_environment (car body) s class_name) class_name))      ;add method to class's instance methods
         (else (class_body_def (cdr body) s class_name)))))
         
-
-(define add_to_field_environment
+; Returns the state after adding the variable definition to the class's static fields
+; Handles (static-var x) and (static-var x 5)
+(define add_to_static_field_environment
     (lambda (expr s class_name)
         (letrec ((class (get_binding class_name s)))
         (cond
-          ((null? (cddr expr)) (set_binding class_name  (list (parent class) (set_binding (cadr expr) 'null (field_environment class)) (method_environment class) (instance_field_names class)) s))
-          (else (set_binding class_name (list (parent class) (set_binding (cadr expr) (Mvalue-cps (caddr expr) s new_return_continuation throw_error class_name) (field_environment class)) (method_environment class) (instance_field_names class)) s))
+          ((null? (cddr expr)) (set_binding class_name  (list (parent class) (set_binding (cadr expr) 'null (static_field_environment class)) (static_method_environment class) (instance_field_environment class) (instance_method_environment class)) s))
+          (else (set_binding class_name (list (parent class) (set_binding (cadr expr) (Mvalue-cps (caddr expr) s new_return_continuation throw_error class_name) (static_field_environment class)) (static_method_environment class) (instance_field_environment class) (instance_method_environment class)) s))
           ))))
 
-
-(define add_to_method_environment
+; Returns the state after adding the new function closure to the class's static methods
+; Handles (static-function main () body) and (static-function f ())
+(define add_to_static_method_environment
     (lambda (expr s class_name)
         (letrec ((class (get_binding class_name s)))
-        ;(display "\n\n")
-        ;(display "class name in add_method: ")
-        ;(display class_name)
-        ;(display "\n")
-        ;(display expr)
-        ;(display "\n")
-        ;(display class)
-        ;(display "\n")
-        ;(display (cadr expr))
-        ;(display "\n")
-        ;(display (make_closure expr s class_name))
-        ;(display "\n")
-        ;(display (set_binding (cadr expr) (make_closure expr s class_name) (method_environment class)))
-        ;(display "\n")
-        ;(display (list (parent class) (field_environment class) (set_binding (cadr expr) (make_closure expr s class_name) (method_environment class)) (instance_field_names class)))
         (cond
-          ((null? (cddr expr)) (set_binding class_name (list (parent class) (field_environment class) (set_binding (cadr expr) 'null (method_environment class)) (instance_field_names class))) s)
-          (else (set_binding class_name (list (parent class) (field_environment class) (set_binding (cadr expr) (make_closure expr s class_name) (method_environment class)) (instance_field_names class)) s))
+          ((null? (cddr expr)) (set_binding class_name (list (parent class) (static_field_environment class) (set_binding (cadr expr) 'null (static_method_environment class)) (instance_field_environment class) (instance_method_environment class)) s))
+          (else (set_binding class_name (list (parent class) (static_field_environment class) (set_binding (cadr expr) (make_closure expr s class_name) (static_method_environment class)) (instance_field_environment class) (instance_method_environment class)) s))
           ))))
 
+; Returns the state after adding the variable definition to the class's instance fields
+; Handles (var x) and (var x 5)
+(define add_to_instance_field_environment
+  (lambda (expr s class_name)
+    (letrec ((class (get_binding class_name s)))
+    (cond
+      ((null? (cddr expr)) (set_binding class_name (list (parent class) (static_field_environment class) (static_method_environment class) (set_binding (cadr expr) 'null (instance_field_environment class)) (instance_method_environment class)) s))
+      (else (set_binding class_name (list (parent class) (static_field_environment class) (static_method_environment class) (set_binding (cadr expr) (Mvalue-cps (caddr expr) s new_return_continuation throw_error class_name) (instance_field_environment class)) (instance_method_environment class)) s))
+    ))))
+
+; Returns the state after adding the new function closure to the class's instance methods
+; Handles (function getX () body) and (function getX ())
+(define add_to_instance_method_environment
+  (lambda (expr s class_name)
+    (letrec ((class (get_binding class_name s)))
+      (cond
+        ((null? (cddr expr)) (set_binding class_name (list (parent class) (static_field_environment class) (static_method_environment class) (instance_field_environment class) (set_binding (cadr expr) 'null (instance_method_environment class))) s))
+        (else (set_binding class_name (list (parent class) (static_field_environment class) (static_method_environment class) (instance_field_environment class) (set_binding (cadr expr) (make_closure expr s class_name) (instance_method_environment class))) s))
+      ))))
 
 ; Gets i.e. A.x, you would call with (key=x, class_name=A, state=s)
-; If the class name exists, search its field_environment list for the (tbc)
+; If the class name exists, search its static_field_environment list for the (tbc)
 (define get_field_binding
     (lambda (key class_name s)
       ;(display "\n\n")
@@ -933,8 +946,8 @@
 (define get_field_binding_in_class
     (lambda (key class s)
         (cond
-            ((equal? 'error (get_binding key (field_environment class))) (get_field_binding key (parent class) s))
-            (else (get_binding key (field_environment class)))
+            ((equal? 'error (get_binding key (static_field_environment class))) (get_field_binding key (parent class) s))
+            (else (get_binding key (static_field_environment class)))
         )
     )
 )
@@ -957,7 +970,7 @@
           ((defined_in_layer? key (top_layer s)) (set_binding key val s))
           ((defined? key s) (update_binding key val s))
           ((equal? 'error (get_binding class_name s)) 'error)
-          ((defined? key (field_environment class)) (set_binding class_name (list (parent class) (update_binding key val (field_environment class)) (method_environment class) (instance_field_names class)) s))
+          ((defined? key (static_field_environment class)) (set_binding class_name (list (parent class) (update_binding key val (static_field_environment class)) (static_method_environment class) (instance_field_environment class) (instance_method_environment class)) s))
           ((equal? 'null class_name) (set_binding key val s))
           (else (set_field_binding_in_class key val (get_binding class_name s) s))
         )
@@ -969,8 +982,8 @@
 (define set_field_binding_in_class
   (lambda (key val class s)
     (cond
-      ((equal? 'error (get_binding key (field_environment class))) (set_field_binding key val (parent class) s)) ; call recursively on parent.
-      (else (set_binding key val (field_environment class)))  ; This should update the class definition, i.e. for a static variable.  A.x=5
+      ((equal? 'error (get_binding key (static_field_environment class))) (set_field_binding key val (parent class) s)) ; call recursively on parent.
+      (else (set_binding key val (static_field_environment class)))  ; This should update the class definition, i.e. for a static variable.  A.x=5
     )
   )
 )
@@ -995,8 +1008,8 @@
 (define get_closure_in_class
     (lambda (key class s)
         (cond
-            ((equal? 'error (get_binding key (method_environment class))) (get_closure key (parent class) s))
-            (else (get_binding key (method_environment class)))
+            ((equal? 'error (get_binding key (static_method_environment class))) (get_closure key (parent class) s))
+            (else (get_binding key (static_method_environment class)))
         )
     )
 )
@@ -1023,16 +1036,13 @@
 (define set_closure_binding_in_class
   (lambda (key val class s)
     (cond
-      ((equal? 'error (get_binding key (method_environment class))) (set_closure_binding key val (parent class) s)) ; call recursively on parent.
-      (else (set_binding key val (method_environment class)))  ; This should update the class definition, i.e. for a static variable.  A.x=5
+      ((equal? 'error (get_binding key (static_method_environment class))) (set_closure_binding key val (parent class) s)) ; call recursively on parent.
+      (else (set_binding key val (static_method_environment class)))  ; This should update the class definition, i.e. for a static variable.  A.x=5
     )
   )
 )
 
-;(initial_environment (parser "tests4/2") 'A)
-;(state_remainder 'A (initial_environment (parser "tests4/2") 'A))
-;(interpretClass "tests4/2" 'A)
-;(parser "tests4/7")
-;(initial_environment (parser "tests4/7") 'A)
+(parser "tests5/1")
+(initial_environment (parser "tests5/1") 'A)
 ;(interpretClass "tests4/7" 'A)
 
