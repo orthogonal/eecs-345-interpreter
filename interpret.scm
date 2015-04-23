@@ -594,7 +594,7 @@
 (define create_instance
   (lambda (expr s)
     (letrec ((class_name (cadr expr)))
-    (list class_name (initial_instance_values s class_name))
+    (list class_name (all_initial_instance_values s class_name))
     )))
 
 ; Gets a list of instance field values (for this class and all parent classes) in reverse order of how they're defined
@@ -963,13 +963,6 @@
 ; If the class name exists, search its static_field_environment list for the (tbc)
 (define get_field_binding
     (lambda (key class_name s)
-      ;(display "\n\n")
-      ;(display "get field binding: ")
-      ;(display class_name)
-      ;(display "\n")
-      ;(display key)
-      ;(display "\n")
-      ;(display s)
         (cond
             ((and (list? key) (eq? 'dot (car key))) (cond   ; (dot A x) or (dot super x)
                 ((eq? 'super (cadr key)) (get_field_binding (caddr key) (parent (get_binding class_name s)) s))
@@ -1086,9 +1079,11 @@
   )
 )
 
-(parser "tests5/3")
-(initial_environment (parser "tests5/3") 'A)
-(all_initial_instance_values (initial_environment (parser "tests5/3") 'A) 'B)
-(all_instance_field_names (initial_environment (parser "tests5/3") 'A) 'B)
-;(interpretClass "tests4/7" 'A)
+;(parser "tests5/4")
+;(initial_environment (parser "tests5/4") 'A)
+;(all_initial_instance_values (initial_environment (parser "tests5/3") 'A) 'B)
+;(all_instance_field_names (initial_environment (parser "tests5/4") 'A) 'B)
+;(create_instance '(new A) (initial_environment (parser "tests5/4") 'A))
+;(create_instance '(new B) (initial_environment (parser "tests5/4") 'A))
+(interpretClass "tests4/7" 'A)
 
