@@ -215,13 +215,13 @@
          ((defined? (cadr expr) s) class_name)
          ((eq? 'null class_name) (error "undefined function"))
          ((instance_has_method (cadr expr) instance s) class_name)
-         (else (get_function_class expr s (parent (get_binding class_name s))))
+         (else (get_function_class expr s (parent (get_binding class_name s)) instance))
         ))
       ((equal? (cadr (cadr expr)) 'super) (parent (get_binding class_name s)))
       ((equal? (cadr (cadr expr)) 'this) class_name)
       ((is_instance? (cadr (cadr expr)) class_name instance s) class_name) 
       ((defined? (caddr (cadr expr)) (static_method_environment (get_binding (cadr (cadr expr)) s))) (cadr (cadr expr)))
-      (else (get_function_class expr s (parent (get_binding (cadr (cadr expr)) s)))))))
+      (else (get_function_class expr s (parent (get_binding (cadr (cadr expr)) s)) instance)))))
 
 (define get_function_instance
   (lambda (expr s class_name instance)
@@ -256,7 +256,7 @@
       ((eq? (cadr expr) 'this) class_name)
       ((is_instance? (cadr expr) class_name instance s) class_name) 
       ((defined? (caddr expr) (static_field_environment (get_binding (cadr expr) s))) (cadr expr))
-      (else (get_field_class (list (car expr) (parent (get_binding (cadr expr) s)) (caddr expr)) s class_name)))))
+      (else (get_field_class (list (car expr) (parent (get_binding (cadr expr) s)) (caddr expr)) s class_name instance)))))
 
 (define get_field_instance
   (lambda (expr s class_name instance)
@@ -623,9 +623,9 @@
            (return (- (left_op_val expr s throw class_name instance) (right_op_val expr s throw class_name instance)))))
       ((equal? (operator expr) '*) (return (* (left_op_val expr s throw class_name instance) (right_op_val expr s throw class_name instance))))
       ((equal? (operator expr) '/) (return (/ (- (left_op_val expr s throw class_name instance) (modulo (left_op_val expr s throw class_name instance) (right_op_val expr s throw class_name instance))) (right_op_val expr s throw class_name instance)))) ; Integer division:  (x - (x % y)) / y
-      ((equal? (operator expr) '%) (return (modulo (left_op_val expr s throw class_name) (right_op_val expr s throw class_name))))
+      ((equal? (operator expr) '%) (return (modulo (left_op_val expr s throw class_name instance) (right_op_val expr s throw class_name instance))))
       ((equal? (operator expr) 'funcall) (Mvalue_function_call-cps expr s (lambda (v) (return v)) throw class_name instance))
-      ((logical_operator? (operator expr)) (Mboolean-cps expr s (lambda (v) (return v)) throw class_name))
+      ((logical_operator? (operator expr)) (Mboolean-cps expr s (lambda (v) (return v)) throw class_name instance))
       ((equal? (operator expr) 'new) (return (create_instance expr s)))
       ((equal? (operator expr) 'dot) (return (get_field_binding expr (get_field_class expr s class_name instance) (get_field_instance expr s class_name instance) s)))
       (error "Invalid expression for Mvalue")
@@ -699,19 +699,19 @@
       ((and (not (list? expr)) (eq? (get_binding expr s) 'error)) (return (get_field_binding expr class_name s)))
       ((not (list? expr)) (return (get_binding expr s)))
       ((equal? (car expr) '||) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (or v1 v2))) throw class_name instance)) throw class_name instance))
-      ((equal? (car expr) '&&) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (and v1 v2))) throw class_name)) throw class_name))
-      ((equal? (car expr) '!=) (return (not (equal? (left_op_val expr s throw class_name) (right_op_val expr s throw class_name)))))
-      ((equal? (car expr) '!) (Mboolean-cps (cadr expr) s (lambda (v) (return (not v))) throw class_name))
+      ((equal? (car expr) '&&) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (and v1 v2))) throw class_name instance)) throw class_name instance))
+      ((equal? (car expr) '!=) (return (not (equal? (left_op_val expr s throw class_name instance) (right_op_val expr s throw class_name instance)))))
+      ((equal? (car expr) '!) (Mboolean-cps (cadr expr) s (lambda (v) (return (not v))) throw class_name instance))
       ((equal? (car expr) '>) (return (> (left_op_val expr s throw class_name instance) (right_op_val expr s throw class_name instance))))
       ((equal? (car expr) '<) (return (< (left_op_val expr s throw class_name instance) (right_op_val expr s throw class_name instance))))
-      ((equal? (car expr) '>=) (return (>= (left_op_val expr s throw class_name) (right_op_val expr s throw class_name))))
-      ((equal? (car expr) '<=) (return (<= (left_op_val expr s throw class_name) (right_op_val expr s throw class_name))))
+      ((equal? (car expr) '>=) (return (>= (left_op_val expr s throw class_name instance) (right_op_val expr s throw class_name instance))))
+      ((equal? (car expr) '<=) (return (<= (left_op_val expr s throw class_name instance) (right_op_val expr s throw class_name instance))))
       ((equal? (car expr) '==) (return (equal? (left_op_val expr s throw class_name instance) (right_op_val expr s throw class_name instance))))
       ((equal? (car expr) 'funcall) (Mvalue_function_call-cps expr s (lambda (v)
                                                                        (cond
                                                                          ((equal? v 'true) (return #t))
                                                                          ((equal? v 'false) (return #f))
-                                                                         (return v))) throw class_name))
+                                                                         (return v))) throw class_name instance))
       )
     ))
 
@@ -1030,9 +1030,9 @@
   (lambda (key class_name instance s)
     (cond
       ((eq? 'this (cadr key)) (get_instance_value (caddr key) instance s))                                                ; (dot this x)
-      ((eq? 'super (cadr key)) (get_field_binding (caddr key) (parent (get_binding class_name s)) s))                     ; (dot super x)
+      ((eq? 'super (cadr key)) (get_field_binding (caddr key) (parent (get_binding class_name s)) instance s))                     ; (dot super x)
       ((and (list? (cadr key)) (eq? (caadr key) 'new)) (get_instance_value (caddr key) (create_instance (cadadr key)) s)) ; (dot (new A) x)
-      ((is_class? (cadr key) s) (get_field_binding_in_class (caddr key) (cadr key) s))                                    ; (dot A x)
+      ((is_class? (cadr key) s) (get_field_binding_in_class (caddr key) (cadr key) instance s))                                    ; (dot A x)
       ((is_instance? (cadr key) class_name instance s) (get_instance_value (caddr key) (get_field_binding (cadr key) class_name instance s) s))            ; (dot a x)
       (else (error "Unknown param type to dot function"))                                                                 ; unknown
       )))
@@ -1210,7 +1210,7 @@
   (lambda (key val class_name instance s)
     (cond
       ((and (list? key) (eq? 'dot (car key))) (set_field_binding_dot key val class_name instance s))
-      (else (set_binding_no_dot key val class_name instance s))
+      (else (set_field_binding_no_dot key val class_name instance s))
     )))
 
 ; Updates a variable's binding in a dot expression
@@ -1236,7 +1236,7 @@
       ((defined? key (static_field_environment class)) (set_binding class_name (list (parent class) (update_binding key val (static_field_environment class)) (static_method_environment class) (instance_field_environment class) (instance_method_environment class)) s))
       ((instance_has_field key instance s) (set_instance_value key val instance s))
       ((equal? 'null class_name) (set_binding key val s))
-      (else (set_field_binding_in_class key val class_name s))      
+      (else (set_field_binding_in_class key val class_name instance s))      
     ))))
 
 ; Updates a classes static field (or calls on parent)
@@ -1301,11 +1301,11 @@
   )
 )
 
-(parser "tests5/11")
-(display "\n")
-(initial_environment (parser "tests5/11") 'A)
-(display "\n")
-(interpretClass "tests5/11" 'A)
+;(parser "tests5/12")
+;(display "\n")
+;(initial_environment (parser "tests5/12") 'C)
+;(display "\n")
+;(interpretClass "tests5/12" 'C)
 
 ;(all_initial_instance_values (initial_environment (parser "tests5/3") 'A) 'B)
 ;(all_instance_field_names (initial_environment (parser "tests5/4") 'A) 'B)
