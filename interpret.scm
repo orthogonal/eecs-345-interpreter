@@ -189,10 +189,10 @@
   
     (begin
       (interpret_parse_tree_return
-       (get_function_body (get_closure (functionname expr) (get_function_class expr s class_name) instance s))
-       (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure (functionname expr) (get_function_class expr s class_name) instance s)) s
-                            (add_layer (get_function_environment expr (get_function_class expr s class_name) instance s)) new_return_continuation throw class_name instance)
-       new_return_continuation break_error continue_error throw (get_function_class expr s class_name) instance)
+       (get_function_body (get_closure (functionname expr) (get_function_class expr s class_name instance) (get_function_instance expr s class_name instance) s))
+       (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure (functionname expr) (get_function_class expr s class_name instance) (get_function_instance expr s class_name instance) s)) s
+                            (add_layer (get_function_environment expr (get_function_class expr s class_name instance) (get_function_instance expr s class_name instance) s)) new_return_continuation throw class_name instance)
+       new_return_continuation break_error continue_error throw (get_function_class expr s class_name instance) (get_function_instance expr s class_name instance))
       
       (return s)
       )
@@ -638,7 +638,7 @@
       ((equal? (operator expr) 'funcall) (Mvalue_function_call-cps expr s (lambda (v) (return v)) throw class_name instance))
       ((logical_operator? (operator expr)) (Mboolean-cps expr s (lambda (v) (return v)) throw class_name))
       ((equal? (operator expr) 'new) (return (create_instance expr s)))
-      ((equal? (operator expr) 'dot) (return (get_field_binding (caddr expr) (get_field_class expr s class_name instance) (get_field_instance expr s class_name instance) s)))
+      ((equal? (operator expr) 'dot) (return (get_field_binding expr (get_field_class expr s class_name instance) (get_field_instance expr s class_name instance) s)))
       (error "Invalid expression for Mvalue")
       )
     ))
@@ -1024,13 +1024,13 @@
 ; If the class name exists, search its static_field_environment list for the (tbc)
 (define get_field_binding
     (lambda (key class_name instance s)
-      ;(display "\n\n")
-      ;(display "get_field_binding: ")
-      ;(display class_name)
-      ;(display "\n")
-      ;(display key)
-      ;(display "\n")
-      ;(display s)
+      (display "\n\n")
+      (display "get_field_binding: ")
+      (display class_name)
+      (display "\n")
+      (display key)
+      (display "\n")
+      (display s)
         (cond
             ((and (list? key) (eq? 'dot (car key))) (get_field_binding_dot key class_name instance s))
             (else (get_field_binding_no_dot key class_name instance s))
@@ -1044,7 +1044,7 @@
       ((eq? 'super (cadr key)) (get_field_binding (caddr key) (parent (get_binding class_name s)) s))                     ; (dot super x)
       ((and (list? (cadr key)) (eq? (caadr key) 'new)) (get_instance_value (caddr key) (create_instance (cadadr key)) s)) ; (dot (new A) x)
       ((is_class? (cadr key) s) (get_field_binding_in_class (caddr key) (cadr key) s))                                    ; (dot A x)
-      ((is_instance? (cadr key)) (get_instance_value (caddr key) (get_field_binding (cadr key) class_name s)))            ; (dot a x)
+      ((is_instance? (cadr key) class_name instance s) (get_instance_value (caddr key) (get_field_binding (cadr key) class_name instance s) s))            ; (dot a x)
       (else (error "Unknown param type to dot function"))                                                                 ; unknown
       )))
 
@@ -1064,6 +1064,12 @@
 ; To get the value of a variable name, we use the "elements after" that key as an index to look up the value from the value list
 (define get_instance_value
   (lambda (key instance s)
+    (display "\n\nget_instance_value: ")
+    (display instance)
+    (display "\n")
+    (display key)
+    (display "\n")
+    (display s)
     (unbox (list-ref (cadr instance) (elements_after key (all_instance_field_names s (car instance)))))
   ))
 
@@ -1094,12 +1100,12 @@
     (display 
     (cond
       ((eq? instance 'null) #f)
-      (else (not (eq? (get_binding key (instance_method_environment (get_binding (car instance) s))) 'error)) #f)
+      (else (not (eq? (get_binding key (instance_method_environment (get_binding (car instance) s))) 'error)))
     ))
     
     (cond
       ((eq? instance 'null) #f)
-      (else (not (eq? (get_binding key (instance_method_environment (get_binding (car instance) s))) 'error)) #f))
+      (else (not (eq? (get_binding key (instance_method_environment (get_binding (car instance) s))) 'error))))
     
     ))
   
@@ -1147,6 +1153,8 @@
       (display "\n\n")
       (display "get_closure dot: ")
       (display class_name)
+      (display ", ")
+      (display instance)
       (display "\n")
       (display key)
       (display "\n")
@@ -1272,11 +1280,11 @@
   )
 )
 
-(parser "tests5/7")
+(parser "tests5/10")
 (display "\n")
-(initial_environment (parser "tests5/7") 'A)
+(initial_environment (parser "tests5/10") 'A)
 (display "\n")
-(interpretClass "tests5/7" 'A)
+(interpretClass "tests5/10" 'A)
 
 ;(all_initial_instance_values (initial_environment (parser "tests5/3") 'A) 'B)
 ;(all_instance_field_names (initial_environment (parser "tests5/4") 'A) 'B)
