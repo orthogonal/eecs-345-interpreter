@@ -111,7 +111,7 @@
     (display "\n")
     (display s)
     (display "\n")
-    (letrec ((function_class (get_function_class expr s class_name instance)) (function_instance (get_function_instance expr s class_name instance)))
+    (letrec ((function_class (get_function_class expr s (initial_function_class expr s class_name instance) instance)) (function_instance (get_function_instance expr s class_name instance)))
     (letrec ((function_closure (get_closure (cadr expr) function_class function_instance s)))
     (if (eq? function_closure 'error)
       (error "calling undefined function")
@@ -199,6 +199,19 @@
       (return s)
       ))
     ))
+
+(define initial_function_class
+  (lambda (expr s class_name instance)
+    (display "\n\ninitial function class: ")
+    (display class_name)
+    (display ", ")
+    (display instance)
+    (display "\n")
+    (display s)
+    (if (and (not (list? (cadr expr))) (instance_any_has_method (cadr expr) class_name instance s))
+       (car instance)
+       class_name
+     ))) 
 
 (define get_function_class
   (lambda (expr s class_name instance)
@@ -1054,7 +1067,7 @@
   (lambda (key class_name instance s)
     (cond
       ((defined_in_layer? key (top_layer s)) (get_binding key s))                                                         ; x is a local variable
-      ((instance_has_field key instance s) (get_instance_value key (car instance) instance s))                                ; x is an instance variable
+      ((instance_has_field key instance s) (get_instance_value key class_name instance s))                            ; x is an instance variable
       ((defined? key s) (get_binding key s))                                                                              ; x is a global variable
       (else (get_field_binding_in_class key class_name instance s))                                                       ; x is a class variable (or doesn't exist in this context, which we'll find out here)
     )))
@@ -1093,9 +1106,9 @@
     )))
 
 ; Checks if a given instance has a given instance method
-(define instance_has_method
+(define instance_any_has_method
   (lambda (key runtime_class instance s)
-    (display "\n\ninstance has method: ")
+    (display "\n\ninstance any has method: ")
     (display runtime_class)
     (display ", ")
     (display instance)
@@ -1108,6 +1121,21 @@
       ((eq? runtime_class 'null) #f)
       ((eq? (get_binding key (instance_method_environment (get_binding runtime_class s))) 'error) (instance_has_method key (parent (get_binding runtime_class s)) instance s)) 
       (else #t)
+    )))
+
+(define instance_has_method
+  (lambda (key runtime_class instance s)
+    (display "\n\ninstance has method: ")
+    (display runtime_class)
+    (display ", ")
+    (display instance)
+    (display "\n")
+    (display key)
+    (display "\n")
+    
+    (cond
+      ((eq? instance 'null) #f)
+      (else (not (eq? (get_binding key (instance_method_environment (get_binding runtime_class s))) 'error)))
     )))
   
 
@@ -1173,23 +1201,19 @@
 ; Lookup the value
 (define get_closure_no_dot
   (lambda (key class_name instance s)
-      ;(display "\n\n")
-      ;(display "get_closure_no_dot: ")
-      ;(display class_name)
-      ;(display "\n")
-      ;(display key)
-      ;(display "\n")
-      ;(display s)
-      ;(display "\n")
-      ;(display (defined_in_layer? key (top_layer s)))
-      ;(display "\n")
-      ;(display (instance_has_method key instance s))
-      ;(display "\n")
-      ;(display (defined? key s))
-      ;(display "\n")
+     (display "\n\nget_closure_no_dot: ")
+     (display class_name)
+     (display ", ")
+     (display instance)
+     (display "\n")
+     (display key)
+     (display "\n")
+     (display s)
+     (display "\n")
                
     (cond
       ((defined_in_layer? key (top_layer s)) (get_binding key s))                                                         ; x is a local function definition
+      ((and (not (eq? instance 'null)) (instance_has_method key class_name instance s)) (get_instance_method key class_name instance s))           ; x is an instance method
       ((and (not (eq? instance 'null)) (instance_has_method key (car instance) instance s)) (get_instance_method key (car instance) instance s))           ; x is an instance method
       ((defined? key s) (get_binding key s))                                                                              ; x is a global function defintion
       ((equal? 'error (get_binding class_name s)) 'error)                                                                 ; allow returning error
@@ -1324,8 +1348,8 @@
   )
 )
 
-(parser "tests5/12")
-(display "\n")
-(initial_environment (parser "tests5/12") 'C)
-(display "\n")
-(interpretClass "tests5/12" 'C)
+;(parser "tests5/14")
+;(display "\n")
+;(initial_environment (parser "tests5/14") 'Square)
+;(display "\n")
+;(interpretClass "tests5/14" 'Square)

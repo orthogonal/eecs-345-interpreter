@@ -38,7 +38,7 @@
 (check-eq? (interpretClass "tests5/11" 'A) 54)
 (check-eq? (interpretClass "tests5/12" 'C) 26)
 (check-eq? (interpretClass "tests5/13" 'Square) 117)
-;(check-eq? (interpretClass "tests5/14" 'Square) 32)
+(check-eq? (interpretClass "tests5/14" 'Square) 32)
 ;(check-eq? (interpretClass "tests5/15" 'List) 15)
 ;(check-eq? (interpretClass "tests5/16" 'Box) 16)
 ;(check-eq? (interpretClass "tests5/17" 'List) 123456)
