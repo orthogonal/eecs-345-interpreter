@@ -1233,7 +1233,6 @@
     (cond
       ((defined_in_layer? key (top_layer s)) (set_binding key val s))
       ((defined? key s) (update_binding key val s))
-      ((equal? 'error (get_binding class_name s)) 'error)
       ((defined? key (static_field_environment class)) (set_binding class_name (list (parent class) (update_binding key val (static_field_environment class)) (static_method_environment class) (instance_field_environment class) (instance_method_environment class)) s))
       ((instance_has_field key instance s) (set_instance_value key val instance s))
       ((equal? 'null class_name) (set_binding key val s))
@@ -1245,7 +1244,7 @@
   (lambda (key val class_name instance s)
     (cond
       ((equal? 'error (get_binding key (static_field_environment (get_binding class_name s)))) (set_field_binding key val (parent (get_binding class_name s)) instance s)) ; call recursively on parent.
-      (else (set_binding key val (static_field_environment (get_binding class_name s))))  ; This should update the class definition, i.e. for a static variable.  A.x=5
+      (else (begin (set_binding key val (static_field_environment (get_binding class_name s))) s))  ; This should update the class definition, i.e. for a static variable.  A.x=5
     )))
 
 ; Sets the value of an instance variable in strategy described by Connamacher
@@ -1308,7 +1307,7 @@
 ;(display "\n")
 ;(interpretClass "tests5/12" 'C)
 
-(interpretClass "tests4/6" 'B)
+(interpretClass "tests5/4" 'B)
 
 ;(all_initial_instance_values (initial_environment (parser "tests5/3") 'A) 'B)
 ;(all_instance_field_names (initial_environment (parser "tests5/4") 'A) 'B)
