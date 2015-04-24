@@ -252,7 +252,8 @@
     (display s)
     (display "\n")
     (cond
-      ((eq? (cadr expr) 'super) (parent (get_binding class_name s)))
+      ;((eq? (cadr expr) 'super) (parent (get_binding class_name s)))
+      ((eq? (cadr expr) 'super) class_name)
       ((eq? (cadr expr) 'this) class_name)
       ((is_instance? (cadr expr) class_name instance s) class_name) 
       ((defined? (caddr expr) (static_field_environment (get_binding (cadr expr) s))) (cadr expr))
@@ -696,7 +697,7 @@
       ((boolean? expr) (return expr))
       ((equal? expr 'true) (return #t))
       ((equal? expr 'false) (return #f))
-      ((and (not (list? expr)) (eq? (get_binding expr s) 'error)) (return (get_field_binding expr class_name s)))
+      ((and (not (list? expr)) (eq? (get_binding expr s) 'error)) (return (get_field_binding expr class_name instance s)))
       ((not (list? expr)) (return (get_binding expr s)))
       ((equal? (car expr) '||) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (or v1 v2))) throw class_name instance)) throw class_name instance))
       ((equal? (car expr) '&&) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (and v1 v2))) throw class_name instance)) throw class_name instance))
@@ -1306,6 +1307,8 @@
 ;(initial_environment (parser "tests5/12") 'C)
 ;(display "\n")
 ;(interpretClass "tests5/12" 'C)
+
+(interpretClass "tests4/6" 'B)
 
 ;(all_initial_instance_values (initial_environment (parser "tests5/3") 'A) 'B)
 ;(all_instance_field_names (initial_environment (parser "tests5/4") 'A) 'B)
