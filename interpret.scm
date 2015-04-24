@@ -223,7 +223,7 @@
         ))
       ((equal? (cadr (cadr expr)) 'super) (parent (get_binding class_name s)))
       ((equal? (cadr (cadr expr)) 'this) (get_function_class (list (car expr) (caddr (cadr expr))) s (car instance) instance))
-      ((is_instance? (cadr (cadr expr)) class_name instance s) class_name) 
+      ((is_instance? (cadr (cadr expr)) class_name instance s) (car (get_field_binding (cadr (cadr expr)) class_name instance s)))
       ((defined? (caddr (cadr expr)) (static_method_environment (get_binding (cadr (cadr expr)) s))) (cadr (cadr expr)))
       (else (get_function_class expr s (parent (get_binding (cadr (cadr expr)) s)) instance)))))
 
@@ -672,11 +672,11 @@
 ; Gets a list of instance field names (for this class and all parent classes) in order of how they're defined
 (define all_instance_field_names 
   (lambda (s class_name)
-    (display "\n\n")
-    (display "all instance field names: ")
-    (display class_name)
-    (display "\n")
-    (display s)
+    ;(display "\n\n")
+    ;(display "all instance field names: ")
+    ;(display class_name)
+    ;(display "\n")
+    ;(display s)
     (cond
       ((eq? class_name 'null) '())
       (else (append (instance_field_names s (top_layer (instance_field_environment (get_binding class_name s)))) (all_instance_field_names s (parent (get_binding class_name s))) ))
@@ -1025,6 +1025,8 @@
       (display "\n\n")
       (display "get_field_binding: ")
       (display class_name)
+      (display ", ")
+      (display instance)
       (display "\n")
       (display key)
       (display "\n")
@@ -1052,7 +1054,7 @@
   (lambda (key class_name instance s)
     (cond
       ((defined_in_layer? key (top_layer s)) (get_binding key s))                                                         ; x is a local variable
-      ((instance_has_field key instance s) (get_instance_value key class_name instance s))                                           ; x is an instance variable
+      ((instance_has_field key instance s) (get_instance_value key (car instance) instance s))                                ; x is an instance variable
       ((defined? key s) (get_binding key s))                                                                              ; x is a global variable
       (else (get_field_binding_in_class key class_name instance s))                                                       ; x is a class variable (or doesn't exist in this context, which we'll find out here)
     )))
@@ -1103,9 +1105,10 @@
     
     (cond
       ((eq? instance 'null) #f)
-      (else (not (eq? (get_binding key (instance_method_environment (get_binding runtime_class s))) 'error))))
-    
-    ))
+      ((eq? runtime_class 'null) #f)
+      ((eq? (get_binding key (instance_method_environment (get_binding runtime_class s))) 'error) (instance_has_method key (parent (get_binding runtime_class s)) instance s)) 
+      (else #t)
+    )))
   
 
 ; Determines if a variable is a name of a class (based on lookup value in state being a 5-tuple)
@@ -1187,7 +1190,7 @@
                
     (cond
       ((defined_in_layer? key (top_layer s)) (get_binding key s))                                                         ; x is a local function definition
-      ((instance_has_method key class_name instance s) (get_instance_method key class_name instance s))                                         ; x is an instance method
+      ((and (not (eq? instance 'null)) (instance_has_method key (car instance) instance s)) (get_instance_method key (car instance) instance s))           ; x is an instance method
       ((defined? key s) (get_binding key s))                                                                              ; x is a global function defintion
       ((equal? 'error (get_binding class_name s)) 'error)                                                                 ; allow returning error
       (else (get_closure_in_class key class_name instance s))                                                             ; x is a static method (or doesn't exist in this context, which we'll find out here)
@@ -1321,8 +1324,8 @@
   )
 )
 
-(parser "tests5/14")
+(parser "tests5/12")
 (display "\n")
-(initial_environment (parser "tests5/14") 'Square)
+(initial_environment (parser "tests5/12") 'C)
 (display "\n")
-(interpretClass "tests5/14" 'Square)
+(interpretClass "tests5/12" 'C)
