@@ -1086,10 +1086,22 @@
 ; Checks if a given instance has a given instance method
 (define instance_has_method
   (lambda (key instance s)
+    (display "\n\ninstance has method: ")
+    (display instance)
+    (display "\n")
+    (display key)
+    (display "\n")
+    (display 
     (cond
       ((eq? instance 'null) #f)
       (else (not (eq? (get_binding key (instance_method_environment (get_binding (car instance) s))) 'error)) #f)
-    )))
+    ))
+    
+    (cond
+      ((eq? instance 'null) #f)
+      (else (not (eq? (get_binding key (instance_method_environment (get_binding (car instance) s))) 'error)) #f))
+    
+    ))
   
 
 ; Determines if a variable is a name of a class (based on lookup value in state being a 5-tuple)
@@ -1118,6 +1130,8 @@
       (display "\n\n")
       (display "get_closure: ")
       (display class_name)
+      (display ", ")
+      (display instance)
       (display "\n")
       (display key)
       (display "\n")
@@ -1168,6 +1182,7 @@
       ((defined_in_layer? key (top_layer s)) (get_binding key s))                                                         ; x is a local function definition
       ((instance_has_method key instance s) (get_instance_method key instance s))                                         ; x is an instance method
       ((defined? key s) (get_binding key s))                                                                              ; x is a global function defintion
+      ((equal? 'error (get_binding class_name s)) 'error)                                                                 ; allow returning error
       (else (get_closure_in_class key class_name instance s))                                                             ; x is a static method (or doesn't exist in this context, which we'll find out here)
     )))
 
