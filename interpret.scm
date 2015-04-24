@@ -1291,7 +1291,7 @@
 (define (list-set! l k val)
     (if (zero? k)
         (set-box! (car l) val)
-        (list-set! (cdr list) (- k 1) val)))
+        (list-set! (cdr l) (- k 1) val)))
 
 ; Same code as for fields, but will update the closure environment of a class.  Drops through to set_binding if class_name is 'null as usual.
 (define set_closure_binding
@@ -1321,8 +1321,8 @@
   )
 )
 
-;(parser "tests5/12")
-;(display "\n")
-;(initial_environment (parser "tests5/12") 'C)
-;(display "\n")
-;(interpretClass "tests5/12" 'C)
+(parser "tests5/14")
+(display "\n")
+(initial_environment (parser "tests5/14") 'Square)
+(display "\n")
+(interpretClass "tests5/14" 'Square)
