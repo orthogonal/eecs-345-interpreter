@@ -1148,7 +1148,7 @@
 ; Determines if a variable is an instance variable (based on being a 2-tuple)
 (define is_instance?
   (lambda (key class_name instance s)
-    (and (defined? key s) (list? (get_field_binding key class_name instance s)) (eq? (length (get_field_binding key class_name instance s)) 2))
+    (and (not (eq? (get_field_binding key class_name instance s) 'error)) (list? (get_field_binding key class_name instance s)) (eq? (length (get_field_binding key class_name instance s)) 2))
   ))
 
 ; Lookup a key in a class's static fields
@@ -1348,8 +1348,8 @@
   )
 )
 
-;(parser "tests5/14")
+;(parser "tests5/15")
 ;(display "\n")
-;(initial_environment (parser "tests5/14") 'Square)
+;(initial_environment (parser "tests5/15") 'List)
 ;(display "\n")
-;(interpretClass "tests5/14" 'Square)
+;(interpretClass "tests5/15" 'List)
