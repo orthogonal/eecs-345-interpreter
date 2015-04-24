@@ -110,15 +110,16 @@
     ;(display "calling function as: ")
     ;(display (get_function_class expr s class_name))
     (letrec ((function_class (get_function_class expr s class_name instance)) (function_instance (get_function_instance expr s class_name instance)))
-    (if (eq? (get_closure (functionname expr) function_class function_instance s) 'error)
+    (letrec ((function_closure (get_closure (functionname expr) function_class function_instance s)))
+    (if (eq? function_closure 'error)
       (error "calling undefined function")
       (return (get_binding 'return
           (interpret_parse_tree_return
-            (get_function_body (get_closure (functionname expr) function_class function_instance s))
-             (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure (functionname expr) function_class function_instance s)) s
+            (get_function_body function_closure)
+             (bind_parameters-cps (get_actual_params expr) (get_formal_params function_closure) s
                (add_layer (get_function_environment expr function_class function_instance s)) new_return_continuation throw class_name instance)
              new_return_continuation break_error continue_error throw function_class function_instance)))
-    ))))
+    )))))
 
 (define get_formal_params car)
 (define get_function_body cadr)
@@ -217,6 +218,7 @@
          (else (get_function_class expr s (parent (get_binding class_name s))))
         ))
       ((equal? (cadr (cadr expr)) 'super) (parent (get_binding class_name s)))
+      ((equal? (cadr (cadr expr)) 'this) class_name)
       ((is_instance? (cadr (cadr expr)) class_name instance s) class_name) 
       ((defined? (caddr (cadr expr)) (static_method_environment (get_binding (cadr (cadr expr)) s))) (cadr (cadr expr)))
       (else (get_function_class expr s (parent (get_binding (cadr (cadr expr)) s)))))))
