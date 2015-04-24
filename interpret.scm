@@ -99,18 +99,20 @@
 ; This is done by treating a function as a subprogram and returning the 'return binding in the resulting state
 (define Mvalue_function_call-cps
   (lambda (expr s return throw class_name instance)
-    ;(display "\n\n")
-    ;(display "mvalue function call: ")
-    ;(display class_name)
-    ;(display "\n")
-    ;(display expr)
-    ;(display "\n")
-    ;(display s)
-    ;(display "\n")
-    ;(display "calling function as: ")
-    ;(display (get_function_class expr s class_name))
+    (display "\n\n")
+    (display "mvalue function call: ")
+    (display class_name)
+    (display ", ")
+    (display instance)
+    (display "\n")
+    (display expr)
+    (display "\n")
+    (display (cadr expr))
+    (display "\n")
+    (display s)
+    (display "\n")
     (letrec ((function_class (get_function_class expr s class_name instance)) (function_instance (get_function_instance expr s class_name instance)))
-    (letrec ((function_closure (get_closure (functionname expr) function_class function_instance s)))
+    (letrec ((function_closure (get_closure (cadr expr) function_class function_instance s)))
     (if (eq? function_closure 'error)
       (error "calling undefined function")
       (return (get_binding 'return
@@ -203,6 +205,8 @@
     (display "\n\n")
     (display "get function class: ")
     (display class_name)
+    (display ", ")
+    (display instance)
     (display "\n")
     (display expr)
     (display "\n")
@@ -214,11 +218,11 @@
          ((defined? (cadr expr) (static_method_environment (get_binding class_name s))) class_name)
          ((defined? (cadr expr) s) class_name)
          ((eq? 'null class_name) (error "undefined function"))
-         ((instance_has_method (cadr expr) instance s) class_name)
+         ((instance_has_method (cadr expr) class_name instance s) class_name)
          (else (get_function_class expr s (parent (get_binding class_name s)) instance))
         ))
       ((equal? (cadr (cadr expr)) 'super) (parent (get_binding class_name s)))
-      ((equal? (cadr (cadr expr)) 'this) class_name)
+      ((equal? (cadr (cadr expr)) 'this) (get_function_class (list (car expr) (caddr (cadr expr))) s (car instance) instance))
       ((is_instance? (cadr (cadr expr)) class_name instance s) class_name) 
       ((defined? (caddr (cadr expr)) (static_method_environment (get_binding (cadr (cadr expr)) s))) (cadr (cadr expr)))
       (else (get_function_class expr s (parent (get_binding (cadr (cadr expr)) s)) instance)))))
@@ -228,6 +232,8 @@
     (display "\n\n")
     (display "get function instance ")
     (display class_name)
+    (display ", ")
+    (display instance)
     (display "\n")
     (display expr)
     (display "\n")
@@ -252,8 +258,8 @@
     (display s)
     (display "\n")
     (cond
-      ;((eq? (cadr expr) 'super) (parent (get_binding class_name s)))
-      ((eq? (cadr expr) 'super) class_name)
+      ((eq? (cadr expr) 'super) (parent (get_binding class_name s)))
+      ;((eq? (cadr expr) 'super) class_name)
       ((eq? (cadr expr) 'this) class_name)
       ((is_instance? (cadr expr) class_name instance s) class_name) 
       ((defined? (caddr expr) (static_field_environment (get_binding (cadr expr) s))) (cadr expr))
@@ -604,8 +610,10 @@
 (define Mvalue-cps
   (lambda (expr s return throw class_name instance)
     (display "\n\n")
-    (display "mvalue call: ")
+    (display "mvalue : ")
     (display class_name)
+    (display ", ")
+    (display instance)
     (display "\n")
     (display expr)
     (display "\n")
@@ -1030,11 +1038,12 @@
 (define get_field_binding_dot
   (lambda (key class_name instance s)
     (cond
-      ((eq? 'this (cadr key)) (get_instance_value (caddr key) instance s))                                                ; (dot this x)
-      ((eq? 'super (cadr key)) (get_field_binding (caddr key) (parent (get_binding class_name s)) instance s))                     ; (dot super x)
+      ((eq? 'this (cadr key)) (get_instance_value (caddr key) (car instance) instance s))                                                ; (dot this x)
+      ;((eq? 'super (cadr key)) (get_field_binding (caddr key) (parent (get_binding class_name s)) instance s))                     ; (dot super x)
+      ((eq? 'super (cadr key)) (get_field_binding (caddr key) class_name instance s))                     ; (dot super x)
       ((and (list? (cadr key)) (eq? (caadr key) 'new)) (get_instance_value (caddr key) (create_instance (cadadr key)) s)) ; (dot (new A) x)
       ((is_class? (cadr key) s) (get_field_binding_in_class (caddr key) (cadr key) instance s))                                    ; (dot A x)
-      ((is_instance? (cadr key) class_name instance s) (get_instance_value (caddr key) (get_field_binding (cadr key) class_name instance s) s))            ; (dot a x)
+      ((is_instance? (cadr key) class_name instance s) (get_instance_value (caddr key) class_name (get_field_binding (cadr key) class_name instance s) s))            ; (dot a x)
       (else (error "Unknown param type to dot function"))                                                                 ; unknown
       )))
 
@@ -1043,7 +1052,7 @@
   (lambda (key class_name instance s)
     (cond
       ((defined_in_layer? key (top_layer s)) (get_binding key s))                                                         ; x is a local variable
-      ((instance_has_field key instance s) (get_instance_value key instance s))                                           ; x is an instance variable
+      ((instance_has_field key instance s) (get_instance_value key class_name instance s))                                           ; x is an instance variable
       ((defined? key s) (get_binding key s))                                                                              ; x is a global variable
       (else (get_field_binding_in_class key class_name instance s))                                                       ; x is a class variable (or doesn't exist in this context, which we'll find out here)
     )))
@@ -1053,14 +1062,16 @@
 ; The field values are stored as a list that is reversed wrt the field names
 ; To get the value of a variable name, we use the "elements after" that key as an index to look up the value from the value list
 (define get_instance_value
-  (lambda (key instance s)
+  (lambda (key runtime_class instance s)
     (display "\n\nget_instance_value: ")
+    (display runtime_class)
+    (display "\n")
     (display instance)
     (display "\n")
     (display key)
     (display "\n")
     (display s)
-    (unbox (list-ref (cadr instance) (elements_after key (all_instance_field_names s (car instance)))))
+    (unbox (list-ref (cadr instance) (elements_after key (all_instance_field_names s runtime_class))))
   ))
 
 (define elements_after
@@ -1081,21 +1092,18 @@
 
 ; Checks if a given instance has a given instance method
 (define instance_has_method
-  (lambda (key instance s)
+  (lambda (key runtime_class instance s)
     (display "\n\ninstance has method: ")
+    (display runtime_class)
+    (display ", ")
     (display instance)
     (display "\n")
     (display key)
     (display "\n")
-    (display 
-    (cond
-      ((eq? instance 'null) #f)
-      (else (not (eq? (get_binding key (instance_method_environment (get_binding (car instance) s))) 'error)))
-    ))
     
     (cond
       ((eq? instance 'null) #f)
-      (else (not (eq? (get_binding key (instance_method_environment (get_binding (car instance) s))) 'error))))
+      (else (not (eq? (get_binding key (instance_method_environment (get_binding runtime_class s))) 'error))))
     
     ))
   
@@ -1150,11 +1158,12 @@
       (display "\n")
       (display s)
     (cond
-      ((eq? 'this (cadr key)) (get_instance_method (caddr key) instance s))                                                ; (dot this x)
-      ((eq? 'super (cadr key)) (get_closure (caddr key) (parent (get_binding class_name s)) s))                            ; (dot super x)
+      ((eq? 'this (cadr key)) (get_instance_method (caddr key) (car instance) instance s))                                                ; (dot this x)
+      ;((eq? 'super (cadr key)) (get_closure (caddr key) (parent (get_binding class_name s)) s))                            ; (dot super x)
+      ((eq? 'super (cadr key)) (get_closure (caddr key) class_name instance s))                            ; (dot super x)
       ((and (list? (cadr key)) (eq? (caadr key) 'new)) (get_instance_method (caddr key) (create_instance (cadadr key)) s)) ; (dot (new A) x)
-      ((is_class? (cadr key) s) (get_closure_in_class (caddr key) (cadr key) s))                                           ; (dot A x)
-      ((is_instance? (cadr key) class_name s) (get_instance_method (caddr key) (get_closure (cadr key) class_name instance s)))         ; (dot a x)
+      ((is_class? (cadr key) s) (get_closure_in_class (caddr key) (cadr key) instance s))                                           ; (dot A x)
+      ((is_instance? (cadr key) class_name instance s) (get_instance_method (caddr key) class_name (get_field_binding (cadr key) class_name instance s) s))         ; (dot a x)
       (else (error "Unknown param type to dot function"))                                                                  ; unknown
     )))
 
@@ -1178,7 +1187,7 @@
                
     (cond
       ((defined_in_layer? key (top_layer s)) (get_binding key s))                                                         ; x is a local function definition
-      ((instance_has_method key instance s) (get_instance_method key instance s))                                         ; x is an instance method
+      ((instance_has_method key class_name instance s) (get_instance_method key class_name instance s))                                         ; x is an instance method
       ((defined? key s) (get_binding key s))                                                                              ; x is a global function defintion
       ((equal? 'error (get_binding class_name s)) 'error)                                                                 ; allow returning error
       (else (get_closure_in_class key class_name instance s))                                                             ; x is a static method (or doesn't exist in this context, which we'll find out here)
@@ -1186,9 +1195,19 @@
 
 ; Looks up the instance method in the instance's class definition
 (define get_instance_method
-  (lambda (key instance s)
-    (get_binding key (instance_method_environment (get_binding (car instance) s)))
-  ))
+  (lambda (key runtime_class instance s)
+    (display "\n\nget_instance_method: ")
+    (display runtime_class)
+    (display ", ")
+    (display instance)
+    (display "\n")
+    (display key)
+    (display "\n")
+    (display s)
+    (cond 
+      ((eq? 'error (get_binding key (instance_method_environment (get_binding runtime_class s)))) (get_instance_method key (parent (get_binding runtime_class s)) instance s))
+      (else (get_binding key (instance_method_environment (get_binding runtime_class s))))
+  )))
 
 ; Lookup a function closure in a class's static methods
 (define get_closure_in_class
@@ -1219,7 +1238,8 @@
   (lambda (key val class_name instance s)
     (cond
       ((eq? 'this (cadr key)) (set_instance_value (caddr key) val instance s))                                                                      ; (dot this x)
-      ((eq? 'super (cadr key)) (set_field_binding (caddr key) val (parent (get_binding class_name s)) s))                                           ; (dot super x)
+      ;((eq? 'super (cadr key)) (set_field_binding (caddr key) val (parent (get_binding class_name s)) s))                                           ; (dot super x)
+      ((eq? 'super (cadr key)) (set_field_binding (caddr key) val class_name instance s))                                           ; (dot super x)
       ((and (list? (cadr key)) (eq? (caadr key) 'new)) (set_instance_value (caddr key) val (create_instance (cadadr key)) s))                       ; (dot (new A) x)
       ((is_class? (cadr key) s) (set_field_binding_in_class (caddr key) val (cadr key) instance s))                                                 ; (dot A x)
       ((is_instance? (cadr key) class_name instance s) (set_instance_value (caddr key) val (get_field_binding (cadr key) class_name instance s) s)) ; (dot a x)
@@ -1306,11 +1326,3 @@
 ;(initial_environment (parser "tests5/12") 'C)
 ;(display "\n")
 ;(interpretClass "tests5/12" 'C)
-
-(interpretClass "tests5/4" 'B)
-
-;(all_initial_instance_values (initial_environment (parser "tests5/3") 'A) 'B)
-;(all_instance_field_names (initial_environment (parser "tests5/4") 'A) 'B)
-;(create_instance '(new A) (initial_environment (parser "tests5/4") 'A))
-;(create_instance '(new B) (initial_environment (parser "tests5/4") 'A))
-
