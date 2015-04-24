@@ -109,17 +109,16 @@
     ;(display "\n")
     ;(display "calling function as: ")
     ;(display (get_function_class expr s class_name))
-    (if (eq? (get_closure (functionname expr)  (get_function_class expr s class_name instance) (get_function_instance expr s class_name instance) s) 'error)
+    (letrec ((function_class (get_function_class expr s class_name instance)) (function_instance (get_function_instance expr s class_name instance)))
+    (if (eq? (get_closure (functionname expr) function_class function_instance s) 'error)
       (error "calling undefined function")
       (return (get_binding 'return
           (interpret_parse_tree_return
-            (get_function_body (get_closure (functionname expr) (get_function_class expr s class_name instance) (get_function_instance expr s class_name instance) s))
-             (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure (functionname expr) (get_function_class expr s class_name instance) (get_function_instance expr s class_name instance) s)) s
-               (add_layer (get_function_environment expr  (get_function_class expr s class_name instance) (get_function_instance expr s class_name instance) s)) new_return_continuation throw class_name instance)
-             new_return_continuation break_error continue_error throw (get_function_class expr s class_name instance) (get_function_instance expr s class_name instance))))
-    )
-  )
-)
+            (get_function_body (get_closure (functionname expr) function_class function_instance s))
+             (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure (functionname expr) function_class function_instance s)) s
+               (add_layer (get_function_environment expr function_class function_instance s)) new_return_continuation throw class_name instance)
+             new_return_continuation break_error continue_error throw function_class function_instance)))
+    ))))
 
 (define get_formal_params car)
 (define get_function_body cadr)
@@ -186,16 +185,16 @@
     ;(display (get_closure (functionname expr) (get_function_class expr s class_name) s))
     ;(display "\ncalling function as: ")
     ;(display (get_function_class expr s class_name))
-  
+    (letrec ((function_class (get_function_class expr s class_name instance)) (function_instance (get_function_instance expr s class_name instance)))
     (begin
       (interpret_parse_tree_return
-       (get_function_body (get_closure (functionname expr) (get_function_class expr s class_name instance) (get_function_instance expr s class_name instance) s))
-       (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure (functionname expr) (get_function_class expr s class_name instance) (get_function_instance expr s class_name instance) s)) s
-                            (add_layer (get_function_environment expr (get_function_class expr s class_name instance) (get_function_instance expr s class_name instance) s)) new_return_continuation throw class_name instance)
-       new_return_continuation break_error continue_error throw (get_function_class expr s class_name instance) (get_function_instance expr s class_name instance))
+       (get_function_body (get_closure (functionname expr) function_class function_instance s))
+       (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure (functionname expr) function_class function_instance s)) s
+                            (add_layer (get_function_environment expr function_class function_instance s)) new_return_continuation throw class_name instance)
+       new_return_continuation break_error continue_error throw function_class function_instance)
       
       (return s)
-      )
+      ))
     ))
 
 (define get_function_class
@@ -208,13 +207,13 @@
     (display "\n")
     (display s)
     (display "\n")
-    (display (parent (get_binding class_name s)))
     (cond
       ((not (list? (cadr expr)))
        (cond 
          ((defined? (cadr expr) (static_method_environment (get_binding class_name s))) class_name)
          ((defined? (cadr expr) s) class_name)
          ((eq? 'null class_name) (error "undefined function"))
+         ((instance_has_method (cadr expr) instance s) class_name)
          (else (get_function_class expr s (parent (get_binding class_name s))))
         ))
       ((equal? (cadr (cadr expr)) 'super) (parent (get_binding class_name s)))
@@ -232,14 +231,6 @@
     (display "\n")
     (display s)
     (display "\n")
-    (display 
-    (cond
-      ((not (list? (cadr expr))) instance)
-      ((eq? (cadr (cadr expr)) 'super) instance)
-      ((eq? (cadr (cadr expr)) 'this) instance)
-      ((is_class? (cadr (cadr expr)) s) instance) 
-      (else (get_field_binding (cadr (cadr expr)) class_name instance s)))) 
-    
     (cond
       ((not (list? (cadr expr))) instance)
       ((eq? (cadr (cadr expr)) 'super) instance)
@@ -258,8 +249,6 @@
     (display "\n")
     (display s)
     (display "\n")
-    (display (eq? (cadr expr) 'super))
-    (display (parent (get_binding class_name s)))
     (cond
       ((eq? (cadr expr) 'super) (parent (get_binding class_name s)))
       ((eq? (cadr expr) 'this) class_name)
@@ -277,8 +266,6 @@
     (display "\n")
     (display s)
     (display "\n")
-    (display (eq? (cadr expr) 'super))
-    (display (parent (get_binding class_name s)))
     (cond
       ((eq? (cadr expr) 'super) instance)
       ((eq? (cadr expr) 'this) instance)
@@ -1312,11 +1299,11 @@
   )
 )
 
-(parser "tests5/10")
+(parser "tests5/11")
 (display "\n")
-(initial_environment (parser "tests5/10") 'A)
+(initial_environment (parser "tests5/11") 'A)
 (display "\n")
-(interpretClass "tests5/10" 'A)
+(interpretClass "tests5/11" 'A)
 
 ;(all_initial_instance_values (initial_environment (parser "tests5/3") 'A) 'B)
 ;(all_instance_field_names (initial_environment (parser "tests5/4") 'A) 'B)
