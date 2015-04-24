@@ -409,7 +409,7 @@
     ;  ((defined? (varname expr) s) (return (update_binding (varname expr) (right_op_val expr s throw class_name) s)))
     ;  (else (error "Variable undefined or out of scope"))
     ;  )
-    (return (set_field_binding (varname expr) (right_op_val expr s throw class_name instance) class_name s))
+    (return (set_field_binding (varname expr) (right_op_val expr s throw class_name instance) class_name instance s))
     )
   )
 
@@ -1216,41 +1216,73 @@
             (else (get_binding key (static_method_environment (get_binding class_name s))))
         )))
 
-; Something to be called by set_binding if it gets a dot thing, i.e. A.x = 5 would be set_field_binding(x, 5, A, s)
-; We would additionally want to make it so that if we were in class A and x=5, the same thing happened... TODO
-; If the class_name comes up 'null, then change in the outer environment of s.  i.e. if x=5 and x is global, not a field of A.
-; I don't do this, but you could call this for everything.  If you aren't looking to set a value within the context of a class, make class_name 'null,
-; and it will fall-through to the regular set_binding operation.
+; Updates a variable's binding in a class, instance, locally, or globally
 (define set_field_binding
-  (lambda (key val class_name s)
+  (lambda (key val class_name instance s)
+    (cond
+      ((and (list? key) (eq? 'dot (car key))) (set_field_binding_dot key val class_name instance s))
+      (else (set_binding_no_dot key val class_name instance s))
+    )))
+
+; Updates a variable's binding in a dot expression
+(define set_field_binding_dot
+  (lambda (key val class_name instance s)
+    (cond
+      ((eq? 'this (cadr key)) (set_instance_value (caddr key) val instance s))                                                                      ; (dot this x)
+      ((eq? 'super (cadr key)) (set_field_binding (caddr key) val (parent (get_binding class_name s)) s))                                           ; (dot super x)
+      ((and (list? (cadr key)) (eq? (caadr key) 'new)) (set_instance_value (caddr key) val (create_instance (cadadr key)) s))                       ; (dot (new A) x)
+      ((is_class? (cadr key) s) (set_field_binding_in_class (caddr key) val (cadr key) instance s))                                                 ; (dot A x)
+      ((is_instance? (cadr key) class_name instance s) (set_instance_value (caddr key) val (get_field_binding (cadr key) class_name instance s) s)) ; (dot a x)
+      (else (error "Unknown param type to dot function"))  
+    )))
+
+; Updates a variable's binding when not dot expression is given
+(define set_field_binding_no_dot
+  (lambda (key val class_name instance s)
     (letrec ((class (get_binding class_name s)))
     (cond
-      ((and (list? key) (eq? 'dot (car key))) (cond
-        ((eq? 'super (cadr key)) (set_field_binding (caddr key) val (parent (get_binding class_name s)) s)) ; (dot parent x) call with parent class
-        (else (set_field_binding (caddr key) val (cadr key) s))
-      ))
-      (else
-        (cond
-          ((defined_in_layer? key (top_layer s)) (set_binding key val s))
-          ((defined? key s) (update_binding key val s))
-          ((equal? 'error (get_binding class_name s)) 'error)
-          ((defined? key (static_field_environment class)) (set_binding class_name (list (parent class) (update_binding key val (static_field_environment class)) (static_method_environment class) (instance_field_environment class) (instance_method_environment class)) s))
-          ((equal? 'null class_name) (set_binding key val s))
-          (else (set_field_binding_in_class key val (get_binding class_name s) s))
-        )
-      )
-    ))
-  )
-)
+      ((defined_in_layer? key (top_layer s)) (set_binding key val s))
+      ((defined? key s) (update_binding key val s))
+      ((equal? 'error (get_binding class_name s)) 'error)
+      ((defined? key (static_field_environment class)) (set_binding class_name (list (parent class) (update_binding key val (static_field_environment class)) (static_method_environment class) (instance_field_environment class) (instance_method_environment class)) s))
+      ((instance_has_field key instance s) (set_instance_value key val instance s))
+      ((equal? 'null class_name) (set_binding key val s))
+      (else (set_field_binding_in_class key val class_name s))      
+    ))))
 
+; Updates a classes static field (or calls on parent)
 (define set_field_binding_in_class
-  (lambda (key val class s)
+  (lambda (key val class_name instance s)
     (cond
-      ((equal? 'error (get_binding key (static_field_environment class))) (set_field_binding key val (parent class) s)) ; call recursively on parent.
-      (else (set_binding key val (static_field_environment class)))  ; This should update the class definition, i.e. for a static variable.  A.x=5
+      ((equal? 'error (get_binding key (static_field_environment (get_binding class_name s)))) (set_field_binding key val (parent (get_binding class_name s)) instance s)) ; call recursively on parent.
+      (else (set_binding key val (static_field_environment (get_binding class_name s))))  ; This should update the class definition, i.e. for a static variable.  A.x=5
+    )))
+
+; Sets the value of an instance variable in strategy described by Connamacher
+; The field names are stored as a list (a x x y w z) that is the concatenation of my class's instance vars + my parent's + my grandparent's + etc...
+; The field values are stored as a list that is reversed wrt the field names
+; To find which value to set, we use the "elements after" that key as an index to look up the value from the value list
+(define set_instance_value
+  (lambda (key val instance s)
+    (display "\n\nset_instance_value: ")
+    (display instance)
+    (display "\n")
+    (display key)
+    (display "\n")
+    (display val)
+    (display "\n")
+    (display s)
+    (begin
+      (list-set! (cadr instance) (elements_after key (all_instance_field_names s (car instance))) val)
+      s
     )
-  )
-)
+  ))
+
+; Sets the val of the element at the given index using set-box!
+(define (list-set! l k val)
+    (if (zero? k)
+        (set-box! (car l) val)
+        (list-set! (cdr list) (- k 1) val)))
 
 ; Same code as for fields, but will update the closure environment of a class.  Drops through to set_binding if class_name is 'null as usual.
 (define set_closure_binding
