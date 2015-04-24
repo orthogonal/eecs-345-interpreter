@@ -1,12 +1,6 @@
 class A {
-  static var x = true;
-
+  static var x = 10;
   static function main() {
-    return x;
-  }
-  
-  var y = false;
-  function instance_func(){
-    return y;
+    return A.x + x;
   }
 }

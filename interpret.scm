@@ -45,7 +45,7 @@
 ; Runs the main function in the given class
 (define interpret_main_in_class
   (lambda (parsed class_name)
-    (Mvalue_function_call-cps '(funcall main) (initial_environment parsed class_name) new_return_continuation throw_error class_name)))
+    (Mvalue_function_call-cps '(funcall main) (initial_environment parsed class_name) new_return_continuation throw_error class_name 'null)))
 
 ; Runs the main function
 (define interpret_main
@@ -77,8 +77,8 @@
 
 ; Gets environment function from function closure and calls it with a state to return function environment
 (define get_function_environment
-  (lambda (expr class_name s)
-    ((caddr (get_closure (functionname expr) class_name s)) s)
+  (lambda (expr class_name instance s)
+    ((caddr (get_closure (functionname expr) class_name instance s)) s)
     )
   )
 
@@ -98,7 +98,7 @@
 ; Evaluates a function call and returns its value
 ; This is done by treating a function as a subprogram and returning the 'return binding in the resulting state
 (define Mvalue_function_call-cps
-  (lambda (expr s return throw class_name)
+  (lambda (expr s return throw class_name instance)
     ;(display "\n\n")
     ;(display "mvalue function call: ")
     ;(display class_name)
@@ -109,14 +109,14 @@
     ;(display "\n")
     ;(display "calling function as: ")
     ;(display (get_function_class expr s class_name))
-    (if (eq? (get_closure (functionname expr)  (get_function_class expr s class_name) s) 'error)
+    (if (eq? (get_closure (functionname expr)  (get_function_class expr s class_name) instance s) 'error)
       (error "calling undefined function")
       (return (get_binding 'return
           (interpret_parse_tree_return
-            (get_function_body (get_closure (functionname expr) (get_function_class expr s class_name) s))
-             (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure (functionname expr) (get_function_class expr s class_name) s)) s
-               (add_layer (get_function_environment expr  (get_function_class expr s class_name) s)) new_return_continuation throw class_name)
-             new_return_continuation break_error continue_error throw (get_function_class expr s class_name))))
+            (get_function_body (get_closure (functionname expr) (get_function_class expr s class_name) instance s))
+             (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure (functionname expr) (get_function_class expr s class_name) instance s)) s
+               (add_layer (get_function_environment expr  (get_function_class expr s class_name) instance s)) new_return_continuation throw class_name instance)
+             new_return_continuation break_error continue_error throw (get_function_class expr s class_name) instance)))
     )
   )
 )
@@ -127,7 +127,7 @@
 
 ; Evaluates the actual params and binds their values to the formal params
 (define bind_parameters-cps
-  (lambda (actual_params formal_params s functionenv return throw class_name)
+  (lambda (actual_params formal_params s functionenv return throw class_name instance)
     ;(display "\n\n")
     ;(display "bind params: ")
     ;(display class_name)
@@ -143,8 +143,8 @@
                         (lambda (v) (bind_parameters-cps (cdr actual_params) (cdr formal_params) s
                                                          (add_to_state (car formal_params) v functionenv)
                                                          (lambda (v2) (return v2)
-                                                           ) throw class_name)
-                          ) throw class_name)
+                                                           ) throw class_name instance)
+                          ) throw class_name instance)
        )
       )
     )
@@ -169,7 +169,7 @@
 ; Side effects are handled naturally by using boxed values
 ; The initial state is returned, because the function will have updated any global vars via side effects
 (define Mstate_function_call-cps
-  (lambda (expr s return throw class_name)
+  (lambda (expr s return throw class_name instance)
     ;(display "\n\n")
     ;(display "mstate function call: ")
     ;(display class_name)
@@ -189,10 +189,10 @@
   
     (begin
       (interpret_parse_tree_return
-       (get_function_body (get_closure (functionname expr) (get_function_class expr s class_name) s))
-       (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure (functionname expr) (get_function_class expr s class_name) s)) s
-                            (add_layer (get_function_environment expr (get_function_class expr s class_name) s)) new_return_continuation throw class_name)
-       new_return_continuation break_error continue_error throw (get_function_class expr s class_name))
+       (get_function_body (get_closure (functionname expr) (get_function_class expr s class_name) instance s))
+       (bind_parameters-cps (get_actual_params expr) (get_formal_params (get_closure (functionname expr) (get_function_class expr s class_name) instance s)) s
+                            (add_layer (get_function_environment expr (get_function_class expr s class_name) instance s)) new_return_continuation throw class_name instance)
+       new_return_continuation break_error continue_error throw (get_function_class expr s class_name) instance)
       
       (return s)
       )
@@ -213,21 +213,41 @@
       (else (get_function_class expr s (parent (get_binding (cadr (cadr expr)) s)))))))
 
 (define get_field_class
-  (lambda (expr s class_name)
-    ;(display "\n\n")
-    ;(display "get field class: ")
-    ;(display class_name)
-    ;(display "\n")
-    ;(display expr)
-    ;(display "\n")
-    ;(display s)
-    ;(display "\n")
-    ;(display (eq? (cadr expr) 'super))
-    ;(display (parent (get_binding class_name s)))
+  (lambda (expr s class_name instance)
+    (display "\n\n")
+    (display "get field class: ")
+    (display class_name)
+    (display "\n")
+    (display expr)
+    (display "\n")
+    (display s)
+    (display "\n")
+    (display (eq? (cadr expr) 'super))
+    (display (parent (get_binding class_name s)))
     (cond
       ((eq? (cadr expr) 'super) (parent (get_binding class_name s)))
+      ((eq? (cadr expr) 'this) class_name)
+      ((is_instance? (cadr expr) class_name instance s) class_name) 
       ((defined? (caddr expr) (static_field_environment (get_binding (cadr expr) s))) (cadr expr))
-      (else (get_field_class expr s (parent (get_binding (cadr expr) s)))))))
+      (else (get_field_class (list (car expr) (parent (get_binding (cadr expr) s)) (caddr expr)) s class_name)))))
+
+(define get_field_instance
+  (lambda (expr s class_name instance)
+    (display "\n\n")
+    (display "get field instance: ")
+    (display class_name)
+    (display "\n")
+    (display expr)
+    (display "\n")
+    (display s)
+    (display "\n")
+    (display (eq? (cadr expr) 'super))
+    (display (parent (get_binding class_name s)))
+    (cond
+      ((eq? (cadr expr) 'super) instance)
+      ((eq? (cadr expr) 'this) instance)
+      ((is_class? (cadr expr) s) instance) 
+      (else (get_field_binding (cadr expr) class_name instance s)))))
 
 ; Some abstractions for parsing out the pieces of a function definition expression
 (define functionname 
@@ -263,10 +283,10 @@
 
 ; Starts the function call with returnImmediate which immediately exits function
 (define interpret_parse_tree_return
-  (lambda (parse_tree state return break continue throw class_name)
+  (lambda (parse_tree state return break continue throw class_name instance)
     (call/cc
      (lambda (returnImmediate)
-       (interpret_parse_tree parse_tree state return returnImmediate break continue throw class_name)
+       (interpret_parse_tree parse_tree state return returnImmediate break continue throw class_name instance)
        )
      )
     )
@@ -274,14 +294,14 @@
 
 ; Takes a parse tree generated from Connamacher's parser, and interprets statements one at a time
 (define interpret_parse_tree
-  (lambda (parse_tree state return function_return break continue throw class_name)
+  (lambda (parse_tree state return function_return break continue throw class_name instance)
     (cond
       ((null? parse_tree) state)
       (else (interpret_parse_tree 
              (parse_tree_remainder parse_tree) 
              (Mstate-cps (parse_tree_statement parse_tree) 
-                         state return function_return break continue throw class_name) 
-             return function_return break continue throw class_name))
+                         state return function_return break continue throw class_name instance) 
+             return function_return break continue throw class_name instance))
       )
     )
   )
@@ -294,16 +314,16 @@
 ; Takes an expression, i.e. (= x 5), and calls the appropriate function
 ;   based on the keyword of the expression
 (define Mstate-cps
-  (lambda (expr s return function_return break continue throw class_name)
+  (lambda (expr s return function_return break continue throw class_name instance)
     (cond
-      ((equal? (keyword expr) 'var)                 (Mstate_var-cps expr s return throw class_name))
-      ((equal? (keyword expr) '=)                   (Mstate_eq-cps expr s return throw class_name))
-      ((equal? (keyword expr) 'return)              (Mstate_return-cps expr s function_return throw class_name))
-      ((equal? (keyword expr) 'if)                  (Mstate_if-cps expr s return function_return break continue throw class_name))
-      ((equal? (keyword expr) 'while)               (Mstate_while-cps expr s return function_return throw class_name))
-      ((equal? (keyword expr) 'begin)               (Mstate_begin-cps expr s return function_return break continue throw class_name))
-      ((equal? (keyword expr) 'funcall)             (Mstate_function_call-cps expr s return throw class_name))
-      ((equal? (keyword expr) 'try)                 (Mstate_try-cps expr s return function_return break continue throw class_name))
+      ((equal? (keyword expr) 'var)                 (Mstate_var-cps expr s return throw class_name instance))
+      ((equal? (keyword expr) '=)                   (Mstate_eq-cps expr s return throw class_name instance))
+      ((equal? (keyword expr) 'return)              (Mstate_return-cps expr s function_return throw class_name instance))
+      ((equal? (keyword expr) 'if)                  (Mstate_if-cps expr s return function_return break continue throw class_name instance))
+      ((equal? (keyword expr) 'while)               (Mstate_while-cps expr s return function_return throw class_name instance))
+      ((equal? (keyword expr) 'begin)               (Mstate_begin-cps expr s return function_return break continue throw class_name instance))
+      ((equal? (keyword expr) 'funcall)             (Mstate_function_call-cps expr s return throw class_name instance))
+      ((equal? (keyword expr) 'try)                 (Mstate_try-cps expr s return function_return break continue throw class_name instance))
       ((equal? (keyword expr) 'throw)               (throw (list s expr)))
       ((equal? (keyword expr) 'function)            (Mstate_function_def-cps expr s return class_name))
       ((equal? (keyword expr) 'break)               (break s))
@@ -322,12 +342,12 @@
 ; The calculated value is (Mvalue (caddr expr) s) or Mvalue(value)
 ; Init is false if no value, true if there is a value.
 (define Mstate_var-cps
-  (lambda (expr s return throw class_name)
+  (lambda (expr s return throw class_name instance)
     (cond
       ((defined_in_layer? (varname expr) (top_layer s)) (error "Redefining variable"))
       ((null? (cddr expr)) (return (set_binding (varname expr) 'null s)))
       (else (Mvalue-cps (initialvalue expr) s (lambda (v) (return 
-                                                           (cons (car (set_binding (varname expr) v (top_layer_state s))) (remove_layer s)))) throw class_name))
+                                                           (cons (car (set_binding (varname expr) v (top_layer_state s))) (remove_layer s)))) throw class_name instance))
       )
     )
   )
@@ -340,7 +360,7 @@
 ; If it's an expression like (= x (+ 3 y)) set the binding to the
 ;   Mvalue evaluation of the right operand expression.
 (define Mstate_eq-cps
-  (lambda (expr s return throw class_name)
+  (lambda (expr s return throw class_name instance)
     ;(display "\n\n")
     ;(display "mstate eq: ")
     ;(display class_name)
@@ -353,14 +373,14 @@
     ;  ((defined? (varname expr) s) (return (update_binding (varname expr) (right_op_val expr s throw class_name) s)))
     ;  (else (error "Variable undefined or out of scope"))
     ;  )
-    (return (set_field_binding (varname expr) (right_op_val expr s throw class_name) class_name s))
+    (return (set_field_binding (varname expr) (right_op_val expr s throw class_name instance) class_name s))
     )
   )
 
 ; Adds the return value into the state under name 'return
 (define Mstate_return-cps
-  (lambda (expr s function_return throw class_name)
-    (function_return (set_binding 'return (Mvalue-cps (returnexpr expr) s (lambda (v) v) throw class_name) s))
+  (lambda (expr s function_return throw class_name instance)
+    (function_return (set_binding 'return (Mvalue-cps (returnexpr expr) s (lambda (v) v) throw class_name instance) s))
     )
   )
 
@@ -372,11 +392,11 @@
 ; If it's false, return just the state unchanged if no else statement, and
 ;  Mstate(else-expr) if there is an else statement.
 (define Mstate_if-cps
-  (lambda (expr s return function_return break continue throw class_name)
+  (lambda (expr s return function_return break continue throw class_name instance)
     (cond
-      ((Mboolean-cps (ifcond expr) s (lambda (v) v) throw class_name) (Mstate-cps (iftruebody expr) s return function_return break continue throw class_name))
+      ((Mboolean-cps (ifcond expr) s (lambda (v) v) throw class_name instance) (Mstate-cps (iftruebody expr) s return function_return break continue throw class_name instance))
       ((null? (ifnoelse expr)) s)
-      (else (Mstate-cps (iffalsebody expr) s return function_return break continue throw class_name))
+      (else (Mstate-cps (iffalsebody expr) s return function_return break continue throw class_name instance))
       )
     )
   )
@@ -392,8 +412,8 @@
 ; IMPORTANT: the letrec here is necessary due to begin statements (eg functions) having global side effects
 ; If we reevaluated the state everywhere that new_state is used, a global var could be incremented over and over again
 (define Mstate_begin-cps
-  (lambda (expr s return function_return break continue throw class_name)
-    (letrec ((new_state (interpret_parse_tree (begin_body expr) (add_layer s) return function_return (break_layer break) (continue_layer continue) throw class_name)))
+  (lambda (expr s return function_return break continue throw class_name instance)
+    (letrec ((new_state (interpret_parse_tree (begin_body expr) (add_layer s) return function_return (break_layer break) (continue_layer continue) throw class_name instance)))
       (cond 
         ((defined? 'return new_state) (set_binding 'return (get_binding 'return (return new_state)) (remove_layer new_state)))
         (else (return (remove_layer new_state)))
@@ -423,15 +443,15 @@
 ;The throw is the expr comming in which will be used for catch
 ;This takes cares of the fi
 (define Mstate_try-cps
-  (lambda (expr s return function_return break continue throw class_name)
+  (lambda (expr s return function_return break continue throw class_name instance)
     (if(hasfinally expr)
        (executefinally (finally_block expr) 
                        (try_catch expr s return
                                   (lambda (v) 
-                                    (return (executefinally (finally_block expr) v return function_return break continue throw class_name)))
-                                  break continue throw class_name)
-                       return function_return break continue throw class_name)
-       (try_catch expr s return function_return break continue throw class_name)
+                                    (return (executefinally (finally_block expr) v return function_return break continue throw class_name instance)))
+                                  break continue throw class_name instance)
+                       return function_return break continue throw class_name instance)
+       (try_catch expr s return function_return break continue throw class_name instance)
        )
 
     )
@@ -439,15 +459,15 @@
 
 ;takes care of catch
 (define try_catch
-  (lambda (expr s return function_return break continue lastThrow class_name)
+  (lambda (expr s return function_return break continue lastThrow class_name instance)
     (call/cc (lambda (throw)
                (if(hascatch expr)
                   (interpret_parse_tree 
                    (trybody expr) s return 
                    function_return
                    break continue (lambda (v) (throw (executecatch (catch_block expr)
-                                                                   (set_binding (catchvariable (catch expr)) (Mvalue-cps (catchvalue v) (catchstate v) return lastThrow class_name) s)
-                                                                   return function_return break continue lastThrow class_name))) class_name)
+                                                                   (set_binding (catchvariable (catch expr)) (Mvalue-cps (catchvalue v) (catchstate v) return lastThrow class_name instance) s)
+                                                                   return function_return break continue lastThrow class_name instance))) class_name instance)
                   (interpret_parse_tree 
                    (trybody expr) s return 
                    function_return
@@ -505,13 +525,13 @@
 (define exeption cadr)
   
 (define executecatch
-  (lambda (expr s return function_return break continue throw class_name)
-    (interpret_parse_tree expr s return function_return break continue throw class_name))
+  (lambda (expr s return function_return break continue throw class_name instance)
+    (interpret_parse_tree expr s return function_return break continue throw class_name instance))
   )
   
 (define executefinally
-  (lambda (expr s return function_return break continue throw class_name)
-    (interpret_parse_tree expr s return function_return break continue throw class_name)
+  (lambda (expr s return function_return break continue throw class_name instance)
+    (interpret_parse_tree expr s return function_return break continue throw class_name instance)
   )
   )
     
@@ -520,13 +540,13 @@
 ;Takes (< i j) (= i (+ i 1)) s and return
 ;This part takes care of break and continue statements
 (define Mstate_while-cps
-  (lambda (expr s return function_return throw class_name)
+  (lambda (expr s return function_return throw class_name instance)
     (call/cc (lambda (break)
                (letrec (
                         (loop (lambda (expr s)
                                 (cond
-                                  ((Mboolean-cps (whilecond expr) s (lambda (v) v) throw class_name)
-                                   (loop expr (Mstate-cps (whilebody expr) s return function_return break (continue loop expr return break) throw class_name)))
+                                  ((Mboolean-cps (whilecond expr) s (lambda (v) v) throw class_name instance)
+                                   (loop expr (Mstate-cps (whilebody expr) s return function_return break (continue loop expr return break) throw class_name instance)))
                                   (else (break s)))
                                 ))) (loop expr s)
                  )
@@ -556,33 +576,33 @@
 ;  boolean evaluation of the expression.
 ; If none of the above, throw an error, expression is invalid.
 (define Mvalue-cps
-  (lambda (expr s return throw class_name)
-    ;(display "\n\n")
-    ;(display "mvalue call: ")
-    ;(display class_name)
-    ;(display "\n")
-    ;(display expr)
-    ;(display "\n")
-    ;(display s)
+  (lambda (expr s return throw class_name instance)
+    (display "\n\n")
+    (display "mvalue call: ")
+    (display class_name)
+    (display "\n")
+    (display expr)
+    (display "\n")
+    (display s)
     (cond
       ((number? expr) (return expr))
       ((equal? expr 'true) (return #t))
       ((equal? expr 'false) (return #f))
-      ((and (not (list? expr)) (eq? (get_binding expr s) 'error)) (return (get_field_binding expr class_name s)))
+      ((and (not (list? expr)) (eq? (get_binding expr s) 'error)) (return (get_field_binding expr class_name instance s)))
       ((not (list? expr)) (return (get_binding expr s)))
       ;((not (list? expr)) (return (get_field_binding expr class_name s)))
-      ((equal? (operator expr) '+) (return (+ (left_op_val expr s throw class_name) (right_op_val expr s throw class_name))))
+      ((equal? (operator expr) '+) (return (+ (left_op_val expr s throw class_name instance) (right_op_val expr s throw class_name instance))))
       ((equal? (operator expr) '-)
        (if (null? (cddr expr)) 
-           (return (- 0 (left_op_val expr s throw class_name)))
-           (return (- (left_op_val expr s throw class_name) (right_op_val expr s throw class_name)))))
-      ((equal? (operator expr) '*) (return (* (left_op_val expr s throw class_name) (right_op_val expr s throw class_name))))
-      ((equal? (operator expr) '/) (return (/ (- (left_op_val expr s throw class_name) (modulo (left_op_val expr s throw class_name) (right_op_val expr s throw class_name))) (right_op_val expr s throw class_name)))) ; Integer division:  (x - (x % y)) / y
+           (return (- 0 (left_op_val expr s throw class_name instance)))
+           (return (- (left_op_val expr s throw class_name instance) (right_op_val expr s throw class_name instance)))))
+      ((equal? (operator expr) '*) (return (* (left_op_val expr s throw class_name instance) (right_op_val expr s throw class_name instance))))
+      ((equal? (operator expr) '/) (return (/ (- (left_op_val expr s throw class_name instance) (modulo (left_op_val expr s throw class_name instance) (right_op_val expr s throw class_name instance))) (right_op_val expr s throw class_name instance)))) ; Integer division:  (x - (x % y)) / y
       ((equal? (operator expr) '%) (return (modulo (left_op_val expr s throw class_name) (right_op_val expr s throw class_name))))
-      ((equal? (operator expr) 'funcall) (Mvalue_function_call-cps expr s (lambda (v) (return v)) throw class_name))
+      ((equal? (operator expr) 'funcall) (Mvalue_function_call-cps expr s (lambda (v) (return v)) throw class_name instance))
       ((logical_operator? (operator expr)) (Mboolean-cps expr s (lambda (v) (return v)) throw class_name))
       ((equal? (operator expr) 'new) (return (create_instance expr s)))
-      ((equal? (operator expr) 'dot) (return (get_field_binding (caddr expr) (get_field_class expr s class_name) s)))
+      ((equal? (operator expr) 'dot) (return (get_field_binding (caddr expr) (get_field_class expr s class_name instance) (get_field_instance expr s class_name instance) s)))
       (error "Invalid expression for Mvalue")
       )
     ))
@@ -618,6 +638,11 @@
 ; Gets a list of instance field names (for this class and all parent classes) in order of how they're defined
 (define all_instance_field_names 
   (lambda (s class_name)
+    (display "\n\n")
+    (display "all instance field names: ")
+    (display class_name)
+    (display "\n")
+    (display s)
     (cond
       ((eq? class_name 'null) '())
       (else (append (instance_field_names s (top_layer (instance_field_environment (get_binding class_name s)))) (all_instance_field_names s (parent (get_binding class_name s))) ))
@@ -641,22 +666,22 @@
 ; and if it's an arithmetic comparison, do the corresponding scheme expression
 ;    with the Mvalues of the operands.
 (define Mboolean-cps
-  (lambda (expr s return throw class_name)
+  (lambda (expr s return throw class_name instance)
     (cond
       ((boolean? expr) (return expr))
       ((equal? expr 'true) (return #t))
       ((equal? expr 'false) (return #f))
       ((and (not (list? expr)) (eq? (get_binding expr s) 'error)) (return (get_field_binding expr class_name s)))
       ((not (list? expr)) (return (get_binding expr s)))
-      ((equal? (car expr) '||) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (or v1 v2))) throw class_name)) throw class_name))
+      ((equal? (car expr) '||) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (or v1 v2))) throw class_name instance)) throw class_name instance))
       ((equal? (car expr) '&&) (Mboolean-cps (caddr expr) s (lambda (v1) (Mboolean-cps (cadr expr) s (lambda (v2) (return (and v1 v2))) throw class_name)) throw class_name))
       ((equal? (car expr) '!=) (return (not (equal? (left_op_val expr s throw class_name) (right_op_val expr s throw class_name)))))
       ((equal? (car expr) '!) (Mboolean-cps (cadr expr) s (lambda (v) (return (not v))) throw class_name))
-      ((equal? (car expr) '>) (return (> (left_op_val expr s throw class_name) (right_op_val expr s throw class_name))))
-      ((equal? (car expr) '<) (return (< (left_op_val expr s throw class_name) (right_op_val expr s throw class_name))))
+      ((equal? (car expr) '>) (return (> (left_op_val expr s throw class_name instance) (right_op_val expr s throw class_name instance))))
+      ((equal? (car expr) '<) (return (< (left_op_val expr s throw class_name instance) (right_op_val expr s throw class_name instance))))
       ((equal? (car expr) '>=) (return (>= (left_op_val expr s throw class_name) (right_op_val expr s throw class_name))))
       ((equal? (car expr) '<=) (return (<= (left_op_val expr s throw class_name) (right_op_val expr s throw class_name))))
-      ((equal? (car expr) '==) (return (equal? (left_op_val expr s throw class_name) (right_op_val expr s throw class_name))))
+      ((equal? (car expr) '==) (return (equal? (left_op_val expr s throw class_name instance) (right_op_val expr s throw class_name instance))))
       ((equal? (car expr) 'funcall) (Mvalue_function_call-cps expr s (lambda (v)
                                                                        (cond
                                                                          ((equal? v 'true) (return #t))
@@ -666,7 +691,7 @@
     ))
 
 (define left_op_val
-  (lambda (expr s throw class_name)
+  (lambda (expr s throw class_name instance)
     ;(display "\n\n")
     ;(display "left op val: ")
     ;(display class_name)
@@ -676,12 +701,12 @@
     ;(display s)
     ;(display "\n")
     ;(display (Mvalue-cps (cadr expr) s (lambda (v) v) throw class_name))
-    (Mvalue-cps (cadr expr) s (lambda (v) v) throw class_name)
+    (Mvalue-cps (cadr expr) s (lambda (v) v) throw class_name instance)
     ))
 
 (define right_op_val
-  (lambda (expr s throw class_name)
-    (Mvalue-cps (caddr expr) s (lambda (v) v) throw class_name)
+  (lambda (expr s throw class_name instance)
+    (Mvalue-cps (caddr expr) s (lambda (v) v) throw class_name instance)
     ))
 
 (define logical_operator?
@@ -926,7 +951,7 @@
         (letrec ((class (get_binding class_name s)))
         (cond
           ((null? (cddr expr)) (set_binding class_name  (list (parent class) (set_binding (cadr expr) 'null (static_field_environment class)) (static_method_environment class) (instance_field_environment class) (instance_method_environment class)) s))
-          (else (set_binding class_name (list (parent class) (set_binding (cadr expr) (Mvalue-cps (caddr expr) s new_return_continuation throw_error class_name) (static_field_environment class)) (static_method_environment class) (instance_field_environment class) (instance_method_environment class)) s))
+          (else (set_binding class_name (list (parent class) (set_binding (cadr expr) (Mvalue-cps (caddr expr) s new_return_continuation throw_error class_name 'null) (static_field_environment class)) (static_method_environment class) (instance_field_environment class) (instance_method_environment class)) s))
           ))))
 
 ; Returns the state after adding the new function closure to the class's static methods
@@ -946,7 +971,7 @@
     (letrec ((class (get_binding class_name s)))
     (cond
       ((null? (cddr expr)) (set_binding class_name (list (parent class) (static_field_environment class) (static_method_environment class) (set_binding (cadr expr) 'null (instance_field_environment class)) (instance_method_environment class)) s))
-      (else (set_binding class_name (list (parent class) (static_field_environment class) (static_method_environment class) (set_binding (cadr expr) (Mvalue-cps (caddr expr) s new_return_continuation throw_error class_name) (instance_field_environment class)) (instance_method_environment class)) s))
+      (else (set_binding class_name (list (parent class) (static_field_environment class) (static_method_environment class) (set_binding (cadr expr) (Mvalue-cps (caddr expr) s new_return_continuation throw_error class_name 'null) (instance_field_environment class)) (instance_method_environment class)) s))
     ))))
 
 ; Returns the state after adding the new function closure to the class's instance methods
@@ -962,32 +987,168 @@
 ; Gets i.e. A.x, you would call with (key=x, class_name=A, state=s)
 ; If the class name exists, search its static_field_environment list for the (tbc)
 (define get_field_binding
-    (lambda (key class_name s)
+    (lambda (key class_name instance s)
+      ;(display "\n\n")
+      ;(display "get_field_binding: ")
+      ;(display class_name)
+      ;(display "\n")
+      ;(display key)
+      ;(display "\n")
+      ;(display s)
         (cond
-            ((and (list? key) (eq? 'dot (car key))) (cond   ; (dot A x) or (dot super x)
-                ((eq? 'super (cadr key)) (get_field_binding (caddr key) (parent (get_binding class_name s)) s))
-                (else (get_field_binding (caddr key) (cadr key) s))
-            ))
-            (else 
-                (cond
-                    ((equal? 'null class_name) (get_binding key s))
-                    ((not (equal? 'error (get_binding_layer key (car s)))) (get_binding_layer key (car s)))
-                    ((equal? 'error (get_binding class_name s)) 'error)
-                    (else (get_field_binding_in_class key (get_binding class_name s) s))
-                )
-            )
-        )
-    )
-)
+            ((and (list? key) (eq? 'dot (car key))) (get_field_binding_dot key class_name instance s))
+            (else (get_field_binding_no_dot key class_name instance s))
+        )))
 
+; Lookup the value on the RHS from the LHS
+(define get_field_binding_dot
+  (lambda (key class_name instance s)
+    (cond
+      ((eq? 'this (cadr key)) (get_instance_value (caddr key) instance s))                                                ; (dot this x)
+      ((eq? 'super (cadr key)) (get_field_binding (caddr key) (parent (get_binding class_name s)) s))                     ; (dot super x)
+      ((and (list? (cadr key)) (eq? (caadr key) 'new)) (get_instance_value (caddr key) (create_instance (cadadr key)) s)) ; (dot (new A) x)
+      ((is_class? (cadr key) s) (get_field_binding_in_class (caddr key) (cadr key) s))                                    ; (dot A x)
+      ((is_instance? (cadr key)) (get_instance_value (caddr key) (get_field_binding (cadr key) class_name s)))            ; (dot a x)
+      (else (error "Unknown param type to dot function"))                                                                 ; unknown
+      )))
+
+; Lookup the value
+(define get_field_binding_no_dot
+  (lambda (key class_name instance s)
+    (cond
+      ((defined_in_layer? key (top_layer s)) (get_binding key s))                                                         ; x is a local variable
+      ((instance_has_field key instance s) (get_instance_value key instance s))                                           ; x is an instance variable
+      ((defined? key s) (get_binding key s))                                                                              ; x is a global variable
+      (else (get_field_binding_in_class key class_name instance s))                                                       ; x is a class variable (or doesn't exist in this context, which we'll find out here)
+    )))
+
+; Gets the value of an instance variable in strategy described by Connamacher
+; The field names are stored as a list (a x x y w z) that is the concatenation of my class's instance vars + my parent's + my grandparent's + etc...
+; The field values are stored as a list that is reversed wrt the field names
+; To get the value of a variable name, we use the "elements after" that key as an index to look up the value from the value list
+(define get_instance_value
+  (lambda (key instance s)
+    (unbox (list-ref (cadr instance) (elements_after key (all_instance_field_names s (car instance)))))
+  ))
+
+(define elements_after
+  (lambda (key l)
+    (cond
+      ((null? l) -1)
+      ((eq? key (car l)) (length (cdr l)))
+      (else (elements_after key (cdr l))))))
+                         
+
+; Checks if a given instance has a given instance variable
+(define instance_has_field
+  (lambda (key instance s)
+    (cond
+      ((eq? instance 'null) #f)
+      (else (not (eq? (member key (all_instance_field_names s (car instance))) #f)))
+    )))
+
+; Checks if a given instance has a given instance method
+(define instance_has_method
+  (lambda (key instance s)
+    (cond
+      ((eq? instance 'null) #f)
+      (else (not (eq? (get_binding key (instance_method_environment (get_binding (car instance) s))) 'error)) #f)
+    )))
+  
+
+; Determines if a variable is a name of a class (based on lookup value in state being a 5-tuple)
+(define is_class?
+  (lambda (key s)
+     (and (defined? key s) (list? (get_binding key s)) (eq? (length (get_binding key s)) 5))
+   ))
+
+; Determines if a variable is an instance variable (based on being a 2-tuple)
+(define is_instance?
+  (lambda (key class_name instance s)
+    (and (defined? key s) (list? (get_field_binding key class_name instance s)) (eq? (length (get_field_binding key class_name instance s)) 2))
+  ))
+
+; Lookup a key in a class's static fields
+; (get_field_binding_in_class 'x 'A 'null s)
 (define get_field_binding_in_class
-    (lambda (key class s)
+    (lambda (key class_name instance s)
         (cond
-            ((equal? 'error (get_binding key (static_field_environment class))) (get_field_binding key (parent class) s))
-            (else (get_binding key (static_field_environment class)))
-        )
-    )
-)
+            ((equal? 'error (get_binding key (static_field_environment (get_binding class_name s)))) (get_field_binding key (parent (get_binding class_name s)) instance s))
+            (else (get_binding key (static_field_environment (get_binding class_name s))))
+        )))
+
+(define get_closure
+    (lambda (key class_name instance s)
+      (display "\n\n")
+      (display "get_closure: ")
+      (display class_name)
+      (display "\n")
+      (display key)
+      (display "\n")
+      (display s)
+        (cond
+            ((and (list? key) (eq? 'dot (car key))) (get_closure_dot key class_name instance s))
+            (else (get_closure_no_dot key class_name instance s))
+        )))
+
+; Lookup the value on the RHS from the LHS
+(define get_closure_dot
+  (lambda (key class_name instance s)
+    (cond
+      ((eq? 'this (cadr key)) (get_instance_method (caddr key) instance s))                                                ; (dot this x)
+      ((eq? 'super (cadr key)) (get_closure (caddr key) (parent (get_binding class_name s)) s))                            ; (dot super x)
+      ((and (list? (cadr key)) (eq? (caadr key) 'new)) (get_instance_method (caddr key) (create_instance (cadadr key)) s)) ; (dot (new A) x)
+      ((is_class? (cadr key) s) (get_closure_in_class (caddr key) (cadr key) s))                                           ; (dot A x)
+      ((is_instance? (cadr key) class_name s) (get_instance_method (caddr key) (get_closure (cadr key) class_name instance s)))         ; (dot a x)
+      (else (error "Unknown param type to dot function"))                                                                  ; unknown
+    )))
+
+; Lookup the value
+(define get_closure_no_dot
+  (lambda (key class_name instance s)
+      ;(display "\n\n")
+      ;(display "get_closure_no_dot: ")
+      ;(display class_name)
+      ;(display "\n")
+      ;(display key)
+      ;(display "\n")
+      ;(display s)
+      ;(display "\n")
+      ;(display (defined_in_layer? key (top_layer s)))
+      ;(display "\n")
+      ;(display (instance_has_method key instance s))
+      ;(display "\n")
+      ;(display (defined? key s))
+      ;(display "\n")
+               
+    (cond
+      ((defined_in_layer? key (top_layer s)) (get_binding key s))                                                         ; x is a local function definition
+      ((instance_has_method key instance s) (get_instance_method key instance s))                                         ; x is an instance method
+      ((defined? key s) (get_binding key s))                                                                              ; x is a global function defintion
+      (else (get_closure_in_class key class_name instance s))                                                             ; x is a static method (or doesn't exist in this context, which we'll find out here)
+    )))
+
+; Looks up the instance method in the instance's class definition
+(define get_instance_method
+  (lambda (key instance s)
+    (get_binding key (instance_method_environment (get_binding (car instance) s)))
+  ))
+
+; Lookup a function closure in a class's static methods
+(define get_closure_in_class
+    (lambda (key class_name instance s)
+      ;(display "\n\n")
+      ;(display "get_closure_in_class: ")
+      ;(display class_name)
+      ;(display "\n")
+      ;(display key)
+      ;(display "\n")
+      ;(display s)
+      ;(display "\n")
+        (cond
+            ((equal? 'error (get_binding key (static_method_environment (get_binding class_name s)))) (get_closure key (parent (get_binding class_name s)) s))
+            (else (get_binding key (static_method_environment (get_binding class_name s))))
+        )))
 
 ; Something to be called by set_binding if it gets a dot thing, i.e. A.x = 5 would be set_field_binding(x, 5, A, s)
 ; We would additionally want to make it so that if we were in class A and x=5, the same thing happened... TODO
@@ -1025,32 +1186,6 @@
   )
 )
 
-(define get_closure
-    (lambda (key class_name s)
-        (cond
-            ((and (list? key) (eq? 'dot (car key))) (cond   ; (dot A x) or (dot super x)
-                ((eq? 'super (cadr key)) (get_closure (caddr key) (parent (get_binding class_name s)) s))
-                (else (get_closure (caddr key) (cadr key) s))
-            ))
-            (else 
-                (cond
-                    ((eq? 'null class_name) (get_binding key s))
-                    ((eq? 'error (get_binding class_name s)) 'error)
-                    (else (get_closure_in_class key (get_binding class_name s) s))
-                )
-            )
-        )
-))
-
-(define get_closure_in_class
-    (lambda (key class s)
-        (cond
-            ((equal? 'error (get_binding key (static_method_environment class))) (get_closure key (parent class) s))
-            (else (get_binding key (static_method_environment class)))
-        )
-    )
-)
-
 ; Same code as for fields, but will update the closure environment of a class.  Drops through to set_binding if class_name is 'null as usual.
 (define set_closure_binding
   (lambda (key val class_name s)
@@ -1079,11 +1214,14 @@
   )
 )
 
-;(parser "tests5/4")
-;(initial_environment (parser "tests5/4") 'A)
+(parser "tests5/6")
+(display "\n")
+(initial_environment (parser "tests5/6") 'A)
+(display "\n")
+(interpretClass "tests5/6" 'A)
+
 ;(all_initial_instance_values (initial_environment (parser "tests5/3") 'A) 'B)
 ;(all_instance_field_names (initial_environment (parser "tests5/4") 'A) 'B)
 ;(create_instance '(new A) (initial_environment (parser "tests5/4") 'A))
 ;(create_instance '(new B) (initial_environment (parser "tests5/4") 'A))
-(interpretClass "tests4/7" 'A)
 
