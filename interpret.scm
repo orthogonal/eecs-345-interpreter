@@ -204,7 +204,7 @@
   (lambda (expr s class_name instance)
     ;(display "\n\ninitial function class: ")
     ;(display class_name)
-    ;(displayy ", ")
+    ;(display ", ")
     ;(display instance)
     ;(display "\n")
     ;(display s)
@@ -220,11 +220,13 @@
     ;(display class_name)
     ;(display ", ")
     ;(display instance)
-    ;(displayy "\n")
+    ;(display "\n")
     ;(display expr)
     ;(display "\n")
+    ;(display (not (list? (cadr expr))))
+    ;(display "\n")
     ;(display s)
-    ;(displayy "\n")
+    ;(display "\n")
     (cond
       ((not (list? (cadr expr)))
        (cond 
@@ -236,6 +238,7 @@
         ))
       ((equal? (cadr (cadr expr)) 'super) (parent (get_binding class_name s)))
       ((equal? (cadr (cadr expr)) 'this) (get_function_class (list (car expr) (caddr (cadr expr))) s (car instance) instance))
+      ((and (list? (cadr (cadr expr))) (equal? (caadr (cadr expr)) 'funcall)) (car (Mvalue_function_call-cps (cadr (cadr expr)) s new_return_continuation throw_error class_name instance)))
       ((is_instance? (cadr (cadr expr)) class_name instance s) (car (get_field_binding (cadr (cadr expr)) class_name instance s)))
       ((defined? (caddr (cadr expr)) (static_method_environment (get_binding (cadr (cadr expr)) s))) (cadr (cadr expr)))
       (else (get_function_class expr s (parent (get_binding (cadr (cadr expr)) s)) instance)))))
@@ -248,7 +251,7 @@
     ;(display ", ")
     ;(display instance)
     ;(display "\n")
-    ;(displayyyyyyyyyyyyyy expr)
+    ;(display expr)
     ;(display "\n")
     ;(display s)
     ;(display "\n")
@@ -256,6 +259,7 @@
       ((not (list? (cadr expr))) instance)
       ((eq? (cadr (cadr expr)) 'super) instance)
       ((eq? (cadr (cadr expr)) 'this) instance)
+      ((and (list? (cadr (cadr expr))) (equal? (caadr (cadr expr)) 'funcall)) (Mvalue_function_call-cps (cadr (cadr expr)) s new_return_continuation throw_error class_name instance))
       ((is_class? (cadr (cadr expr)) s) instance) 
       (else (get_field_binding (cadr (cadr expr)) class_name instance s)))
     ))
@@ -263,17 +267,18 @@
 (define get_field_class
   (lambda (expr s class_name instance)
     ;(display "\n\n")
-    ;(displayy "get field class: ")
-    ;(displayy class_name)
-    ;(displayy "\n")
+    ;(display "get field class: ")
+    ;(display class_name)
+    ;(display "\n")
     ;(display expr)
     ;(display "\n")
-    ;(displayy s)
+    ;(display s)
     ;(display "\n")
     (cond
       ((eq? (cadr expr) 'super) (parent (get_binding class_name s)))
       ;((eq? (cadr expr) 'super) class_name)
       ((eq? (cadr expr) 'this) class_name)
+      ((and (list? (cadr expr)) (eq? (caadr expr) 'funcall)) (car (Mvalue_function_call-cps (cadr expr) s new_return_continuation throw_error class_name instance)))
       ((is_instance? (cadr expr) class_name instance s) class_name) 
       ((defined? (caddr expr) (static_field_environment (get_binding (cadr expr) s))) (cadr expr))
       (else (get_field_class (list (car expr) (parent (get_binding (cadr expr) s)) (caddr expr)) s class_name instance)))))
@@ -283,14 +288,15 @@
     ;(display "\n\n")
     ;(display "get field instance: ")
     ;(display class_name)
-    ;(displayy "\n")
+    ;(display "\n")
     ;(display expr)
     ;(display "\n")
     ;(display s)
-    ;(displayy "\n")
+    ;(display "\n")
     (cond
       ((eq? (cadr expr) 'super) instance)
       ((eq? (cadr expr) 'this) instance)
+      ((and (list? (cadr expr)) (eq? (caadr expr) 'funcall)) (Mvalue_function_call-cps (cadr expr) s new_return_continuation throw_error class_name instance))
       ((is_class? (cadr expr) s) instance) 
       (else (get_field_binding (cadr expr) class_name instance s)))))
 
@@ -635,8 +641,8 @@
     ;(display instance)
     ;(display "\n")
     ;(display expr)
-    ;(displayy "\n")
-    ;(displayy s)
+    ;(display "\n")
+    ;(display s)
     (cond
       ((number? expr) (return expr))
       ((equal? expr 'true) (return #t))
@@ -1043,7 +1049,7 @@
     (lambda (key class_name instance s)
       ;(display "\n\n")
       ;(display "get_field_binding: ")
-      ;(displayy class_name)
+      ;(display class_name)
       ;(display ", ")
       ;(display instance)
       ;(display "\n")
@@ -1059,6 +1065,8 @@
 (define get_field_binding_dot
   (lambda (key class_name instance s)
     (cond
+      ;(expr s return throw class_name instance)
+      ((and (list? (cadr key)) (eq? 'funcall (car (cadr key)))) (get_field_binding (caddr key) class_name (Mvalue_function_call-cps (cadr key) s new_return_continuation throw_error class_name instance) s))
       ((eq? 'this (cadr key)) (get_instance_value (caddr key) (car instance) instance s))                                                ; (dot this x)
       ;((eq? 'super (cadr key)) (get_field_binding (caddr key) (parent (get_binding class_name s)) instance s))                     ; (dot super x)
       ((eq? 'super (cadr key)) (get_field_binding (caddr key) class_name instance s))                     ; (dot super x)
@@ -1090,7 +1098,7 @@
     ;(display instance)
     ;(display "\n")
     ;(display key)
-    ;(displayy "\n")
+    ;(display "\n")
     ;(display s)
     (unbox (list-ref (cadr instance) (elements_after key (all_instance_field_names s runtime_class))))
   ))
@@ -1195,6 +1203,7 @@
       ;(display "\n")
       ;(display s)
     (cond
+      ((and (list? (cadr key)) (eq? 'funcall (car (cadr key)))) (get_closure (caddr key) class_name (Mvalue_function_call-cps (cadr key) s new_return_continuation throw_error class_name instance) s))
       ((eq? 'this (cadr key)) (get_instance_method (caddr key) (car instance) instance s))                                                ; (dot this x)
       ;((eq? 'super (cadr key)) (get_closure (caddr key) (parent (get_binding class_name s)) s))                            ; (dot super x)
       ((eq? 'super (cadr key)) (get_closure (caddr key) class_name instance s))                            ; (dot super x)
@@ -1206,17 +1215,7 @@
 
 ; Lookup the value
 (define get_closure_no_dot
-  (lambda (key class_name instance s)
-     ;(display "\n\nget_closure_no_dot: ")
-     ;(display class_name)
-     ;(display ", ")
-     ;(display instance)
-     ;(display "\n")
-     ;(display key)
-     ;(display "\n")
-     ;(display s)
-     ;(display "\n")
-               
+  (lambda (key class_name instance s)               
     (cond
       ((defined_in_layer? key (top_layer s)) (get_binding key s))                                                         ; x is a local function definition
       ((and (not (eq? instance 'null)) (instance_has_method key class_name instance s)) (get_instance_method key class_name instance s))           ; x is an instance method
@@ -1229,14 +1228,6 @@
 ; Looks up the instance method in the instance's class definition
 (define get_instance_method
   (lambda (key runtime_class instance s)
-    ;(display "\n\nget_instance_method: ")
-    ;(display runtime_class)
-    ;(display ", ")
-    ;(display instance)
-    ;(display "\n")
-    ;(display key)
-    ;(display "\n")
-    ;(display s)
     (cond 
       ((eq? 'error (get_binding key (instance_method_environment (get_binding runtime_class s)))) (get_instance_method key (parent (get_binding runtime_class s)) instance s))
       (else (get_binding key (instance_method_environment (get_binding runtime_class s))))
@@ -1306,14 +1297,6 @@
 ; To find which value to set, we use the "elements after" that key as an index to look up the value from the value list
 (define set_instance_value
   (lambda (key val instance s)
-    ;(display "\n\nset_instance_value: ")
-    ;(display instance)
-    ;(display "\n")
-    ;(display key)
-    ;(display "\n")
-    ;(display val)
-    ;(display "\n")
-    ;(display s)
     (begin
       (list-set! (cadr instance) (elements_after key (all_instance_field_names s (car instance))) val)
       s

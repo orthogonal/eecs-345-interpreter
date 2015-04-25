@@ -23,7 +23,7 @@
 (check-eq? (interpretClass "tests4/14" 'A) 2000400)
 (check-eq? (interpretClass "tests4/15" 'Pow) 64)
 
-(display "passed all of tests4\n")
+(display "passed all of tests4\n ")
 
 (check-eq? (interpretClass "tests5/1" 'A) 20)
 (check-eq? (interpretClass "tests5/2" 'Square) 400)
@@ -35,11 +35,11 @@
 (check-eq? (interpretClass "tests5/8" 'A) 110)
 (check-eq? (interpretClass "tests5/9" 'A) 125)
 (check-eq? (interpretClass "tests5/10" 'A) 36)
-(check-eq? (interpretClass "tests5/11" 'A) 54)
+(check-eq? (interpretClass "tests5/11" 'A) 54)  
 (check-eq? (interpretClass "tests5/12" 'C) 26)
 (check-eq? (interpretClass "tests5/13" 'Square) 117)
 (check-eq? (interpretClass "tests5/14" 'Square) 32)
-;(check-eq? (interpretClass "tests5/15" 'List) 15)
+(check-eq? (interpretClass "tests5/15" 'List) 15)
 (check-eq? (interpretClass "tests5/16" 'Box) 16)
 ;(check-eq? (interpretClass "tests5/17" 'List) 123456)
 ;(check-eq? (interpretClass "tests5/18" 'List) 5285)
